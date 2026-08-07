@@ -68,6 +68,37 @@ export const defaultSettings: Settings = {
   github: defaultGitHub,
 };
 
+export interface GrammarStat {
+  category: string;
+  count: number;
+  example: string; // 마지막 교정 예시
+  date: string; // 마지막 발생 ISO
+}
+
+/** 반복되는 문법 약점 집계 */
+export function useGrammarStats() {
+  const [grammarStats, setGrammarStats] = useLocalStorage<Record<string, GrammarStat>>(
+    'et.grammar',
+    {},
+  );
+  const addGrammar = useCallback(
+    (category: string, example: string) => {
+      setGrammarStats((prev) => ({
+        ...prev,
+        [category]: {
+          category,
+          count: (prev[category]?.count ?? 0) + 1,
+          example,
+          date: new Date().toISOString(),
+        },
+      }));
+    },
+    [setGrammarStats],
+  );
+  const clearGrammar = useCallback(() => setGrammarStats({}), [setGrammarStats]);
+  return { grammarStats, addGrammar, clearGrammar };
+}
+
 export function useHistory() {
   const [history, setHistory] = useLocalStorage<HistoryEntry[]>('et.history', []);
   const addHistory = useCallback(

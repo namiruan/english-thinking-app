@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Category, Settings } from './types';
-import { defaultSettings, seedCategories, useHistory, useLocalStorage } from './store';
+import {
+  defaultSettings,
+  seedCategories,
+  useGrammarStats,
+  useHistory,
+  useLocalStorage,
+} from './store';
 import { loadVault, type Vault } from './lib/vault';
 import ChatTab from './components/ChatTab';
 import RegisterTab from './components/RegisterTab';
@@ -18,6 +24,7 @@ export default function App() {
     seedCategories[0]?.id ?? '',
   );
   const { history, addHistory, clearHistory } = useHistory();
+  const { grammarStats, addGrammar, clearGrammar } = useGrammarStats();
 
   const [tab, setTab] = useState<Tab>('chat');
   const [showSettings, setShowSettings] = useState(false);
@@ -113,11 +120,19 @@ export default function App() {
           category={activeCat}
           settings={effectiveSettings}
           addHistory={addHistory}
+          addGrammar={addGrammar}
           openSettings={() => setShowSettings(true)}
         />
       </div>
 
-      {tab === 'history' && <HistoryTab history={history} clearHistory={clearHistory} />}
+      {tab === 'history' && (
+        <HistoryTab
+          history={history}
+          clearHistory={clearHistory}
+          grammarStats={grammarStats}
+          clearGrammar={clearGrammar}
+        />
+      )}
 
       {showSettings && (
         <SettingsModal

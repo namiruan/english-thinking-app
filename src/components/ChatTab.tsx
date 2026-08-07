@@ -18,6 +18,7 @@ interface Props {
   category: Category | undefined;
   settings: Settings;
   addHistory: (e: Omit<HistoryEntry, 'id' | 'date'>) => void;
+  addGrammar: (category: string, example: string) => void;
   openSettings: () => void;
 }
 
@@ -211,7 +212,7 @@ function FocusView({
   );
 }
 
-export default function ChatTab({ category, settings, addHistory, openSettings }: Props) {
+export default function ChatTab({ category, settings, addHistory, addGrammar, openSettings }: Props) {
   const [mode, setMode] = useState<Mode>('focus');
   const [phraseIdx, setPhraseIdx] = useState(0);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -388,6 +389,8 @@ export default function ChatTab({ category, settings, addHistory, openSettings }
         const r = await focusTurn(settings.apiKey, phrase, turnsRef.current);
         turnsRef.current.push({ role: 'model', text: JSON.stringify(r) });
         if (r.clean) setCleanCount((c) => Math.min(CLEAN_GOAL, c + 1));
+        // 반복 문법 약점 기록 (오타 제외)
+        r.grammarIssues.forEach((cat) => addGrammar(cat, r.corrected || text));
         // 교정을 내 답변 말풍선에 부착
         if (r.corrected) {
           setMessages((prev) =>
