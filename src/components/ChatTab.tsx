@@ -18,7 +18,7 @@ interface Props {
   category: Category | undefined;
   settings: Settings;
   addHistory: (e: Omit<HistoryEntry, 'id' | 'date'>) => void;
-  addGrammar: (category: string, example: string) => void;
+  addGrammar: (category: string, note: string, example: string) => void;
   openSettings: () => void;
 }
 
@@ -390,7 +390,7 @@ export default function ChatTab({ category, settings, addHistory, addGrammar, op
         turnsRef.current.push({ role: 'model', text: JSON.stringify(r) });
         if (r.clean) setCleanCount((c) => Math.min(CLEAN_GOAL, c + 1));
         // 반복 문법 약점 기록 (오타 제외)
-        r.grammarIssues.forEach((cat) => addGrammar(cat, r.corrected || text));
+        r.grammarIssues.forEach((g) => addGrammar(g.category, g.note, r.corrected || text));
         // 교정을 내 답변 말풍선에 부착
         if (r.corrected) {
           setMessages((prev) =>

@@ -47,6 +47,17 @@ export default function HistoryTab({ history, clearHistory, grammarStats, clearG
                 <div className="grammar-bar">
                   <span style={{ width: `${Math.round((g.count / maxCount) * 100)}%` }} />
                 </div>
+                {g.notes && Object.keys(g.notes).length > 0 && (
+                  <div className="grammar-notes">
+                    {Object.entries(g.notes)
+                      .sort((a, b) => b[1] - a[1])
+                      .map(([note, cnt]) => (
+                        <span className="chip" key={note}>
+                          {note} {cnt}
+                        </span>
+                      ))}
+                  </div>
+                )}
                 {g.example && <div className="grammar-ex">예: {g.example}</div>}
               </div>
             ))}

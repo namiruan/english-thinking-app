@@ -73,6 +73,7 @@ export interface GrammarStat {
   count: number;
   example: string; // 마지막 교정 예시
   date: string; // 마지막 발생 ISO
+  notes: Record<string, number>; // 세부 메모별 횟수
 }
 
 /** 반복되는 문법 약점 집계 */
@@ -82,16 +83,22 @@ export function useGrammarStats() {
     {},
   );
   const addGrammar = useCallback(
-    (category: string, example: string) => {
-      setGrammarStats((prev) => ({
-        ...prev,
-        [category]: {
-          category,
-          count: (prev[category]?.count ?? 0) + 1,
-          example,
-          date: new Date().toISOString(),
-        },
-      }));
+    (category: string, note: string, example: string) => {
+      setGrammarStats((prev) => {
+        const cur = prev[category];
+        const notes = { ...(cur?.notes ?? {}) };
+        if (note) notes[note] = (notes[note] ?? 0) + 1;
+        return {
+          ...prev,
+          [category]: {
+            category,
+            count: (cur?.count ?? 0) + 1,
+            example,
+            date: new Date().toISOString(),
+            notes,
+          },
+        };
+      });
     },
     [setGrammarStats],
   );

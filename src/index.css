@@ -700,8 +700,18 @@ textarea.input:focus {
   background: var(--accent);
   border-radius: 999px;
 }
+.grammar-notes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 9px;
+}
+.grammar-notes .chip {
+  font-size: 11.5px;
+  padding: 3px 9px;
+}
 .grammar-ex {
-  margin-top: 7px;
+  margin-top: 8px;
   font-size: 12px;
   color: var(--muted);
   font-family: var(--mono);

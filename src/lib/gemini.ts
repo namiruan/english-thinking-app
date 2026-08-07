@@ -48,7 +48,10 @@ export const GRAMMAR_CATEGORIES = [
   '수 일치 (주어-동사)',
   '관사 (a/an/the)',
   '단수/복수',
+  '가산/불가산 명사',
   '전치사',
+  '연어 (collocation)',
+  '구동사 (phrasal verb)',
   '어순',
   '대명사',
   '조동사',
@@ -57,6 +60,11 @@ export const GRAMMAR_CATEGORIES = [
   '기타 문법',
 ];
 
+export interface GrammarIssue {
+  category: string; // 고정 카테고리
+  note: string; // 구체적으로 뭘 틀렸는지 짧은 한국어 메모
+}
+
 // ── 집중 모드 (대화형) ──────────────────────────────────────
 export interface FocusResult {
   feedback: string; // 한 줄 반응/인사 (첫 턴이면 인사)
@@ -64,7 +72,7 @@ export interface FocusResult {
   corrected: string; // 학습자 답변을 맥락에 맞게 다듬은 영어 (첫 턴이면 "")
   correctedKo: string; // 교정 문장의 뜻 (첫 턴이면 "")
   correctionReason: string; // 왜 그렇게 고쳤는지 한국어 설명 (첫 턴이면 "")
-  grammarIssues: string[]; // 직전 답변의 문법 오류 카테고리 (오타 제외, 없으면 [])
+  grammarIssues: GrammarIssue[]; // 직전 답변의 문법 오류 (오타 제외, 없으면 [])
   question: string; // 영어 질문 (대화체)
   questionKo: string; // 질문의 자연스러운 한국어 번역
   sampleAnswer: string; // 목표 구문을 쓴 예시 영어 답변
@@ -83,7 +91,7 @@ Every turn return JSON:
 - "corrected": Rewrite the learner's previous answer into the most NATURAL English that expresses what they were trying to say, in this conversation's context (fix awkward wording, grammar, word choice; keep their intent and the target phrase when appropriate). If their answer was already natural, return it lightly polished or unchanged. On the FIRST turn, "".
 - "correctedKo": natural Korean meaning of "corrected". On the FIRST turn, "".
 - "correctionReason": a short, specific Korean explanation of WHY you rewrote it that way — what sounded off and how the correction better fits the intended meaning/nuance. If it was already natural, say so briefly and note any subtle nuance. On the FIRST turn, "".
-- "grammarIssues": an array of the GRAMMAR-error categories in the learner's previous answer. Grammar mistakes ONLY — never include spelling/typos or style preferences. Choose ONLY from this fixed list (use the exact label): ${GRAMMAR_CATEGORIES.map((c) => `"${c}"`).join(', ')}. Return [] if there was no grammatical error, or on the FIRST turn.
+- "grammarIssues": an array describing the GRAMMAR errors in the learner's previous answer. Grammar mistakes ONLY — never include spelling/typos or style preferences. Each item is an object: { "category": one exact label from this fixed list — ${GRAMMAR_CATEGORIES.map((c) => `"${c}"`).join(', ')}; "note": a very short Korean sub-label naming the SPECIFIC point (e.g. "현재완료 시제", "a/an 선택", "동사+동명사", "in/on/at 혼동"). } Use "기타 문법" only when nothing else fits, and still give a precise "note". Return [] if there was no grammatical error, or on the FIRST turn.
 - "question": a short, natural spoken-English question, like a real friend chatting, that naturally invites the learner to answer USING the target phrase. Vary the topic each turn.
 - "questionKo": Korean translation of "question".
 - "sampleAnswer": one natural English answer to your question that uses the target phrase — a model the learner could say.
@@ -100,7 +108,17 @@ const focusSchema = {
     corrected: { type: Type.STRING },
     correctedKo: { type: Type.STRING },
     correctionReason: { type: Type.STRING },
-    grammarIssues: { type: Type.ARRAY, items: { type: Type.STRING, enum: GRAMMAR_CATEGORIES } },
+    grammarIssues: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          category: { type: Type.STRING, enum: GRAMMAR_CATEGORIES },
+          note: { type: Type.STRING },
+        },
+        required: ['category', 'note'],
+      },
+    },
     question: { type: Type.STRING },
     questionKo: { type: Type.STRING },
     sampleAnswer: { type: Type.STRING },
@@ -151,7 +169,11 @@ export async function focusTurn(
     corrected: parsed.corrected ?? '',
     correctedKo: parsed.correctedKo ?? '',
     correctionReason: parsed.correctionReason ?? '',
-    grammarIssues: Array.isArray(parsed.grammarIssues) ? parsed.grammarIssues : [],
+    grammarIssues: Array.isArray(parsed.grammarIssues)
+      ? parsed.grammarIssues
+          .filter((g): g is GrammarIssue => !!g && typeof g.category === 'string')
+          .map((g) => ({ category: g.category, note: typeof g.note === 'string' ? g.note : '' }))
+      : [],
     question: parsed.question ?? '',
     questionKo: parsed.questionKo ?? '',
     sampleAnswer: parsed.sampleAnswer ?? '',
