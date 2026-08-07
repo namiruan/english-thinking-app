@@ -4,7 +4,7 @@ import {
   defaultSettings,
   seedCategories,
   useGrammarStats,
-  useHistory,
+  useProgress,
   useLocalStorage,
 } from './store';
 import { loadVault, type Vault } from './lib/vault';
@@ -23,7 +23,7 @@ export default function App() {
     'et.activeCat',
     seedCategories[0]?.id ?? '',
   );
-  const { history, addHistory, clearHistory } = useHistory();
+  const { progress, recordFocusTurn, recordFreeTurn, clearProgress } = useProgress();
   const { grammarStats, addGrammar, clearGrammar } = useGrammarStats();
 
   const [tab, setTab] = useState<Tab>('chat');
@@ -119,7 +119,8 @@ export default function App() {
         <ChatTab
           category={activeCat}
           settings={effectiveSettings}
-          addHistory={addHistory}
+          recordFocusTurn={recordFocusTurn}
+          recordFreeTurn={recordFreeTurn}
           addGrammar={addGrammar}
           openSettings={() => setShowSettings(true)}
         />
@@ -127,8 +128,8 @@ export default function App() {
 
       {tab === 'history' && (
         <HistoryTab
-          history={history}
-          clearHistory={clearHistory}
+          progress={progress}
+          clearProgress={clearProgress}
           grammarStats={grammarStats}
           clearGrammar={clearGrammar}
         />

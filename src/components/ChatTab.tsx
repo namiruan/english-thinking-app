@@ -4,7 +4,6 @@ import type {
   ChatMessage,
   Correction,
   FocusBlock,
-  HistoryEntry,
   Mode,
   Phrase,
   Settings,
@@ -17,7 +16,8 @@ import { isSpeechRecognitionSupported, startRecognition, type Recognizer } from 
 interface Props {
   category: Category | undefined;
   settings: Settings;
-  addHistory: (e: Omit<HistoryEntry, 'id' | 'date'>) => void;
+  recordFocusTurn: (phraseText: string, clean: boolean) => void;
+  recordFreeTurn: () => void;
   addGrammar: (category: string, note: string, example: string) => void;
   openSettings: () => void;
 }
@@ -212,7 +212,14 @@ function FocusView({
   );
 }
 
-export default function ChatTab({ category, settings, addHistory, addGrammar, openSettings }: Props) {
+export default function ChatTab({
+  category,
+  settings,
+  recordFocusTurn,
+  recordFreeTurn,
+  addGrammar,
+  openSettings,
+}: Props) {
   const [mode, setMode] = useState<Mode>('focus');
   const [phraseIdx, setPhraseIdx] = useState(0);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -232,16 +239,8 @@ export default function ChatTab({ category, settings, addHistory, addGrammar, op
   const phrases = category?.phrases ?? [];
   const phrase: Phrase | undefined = phrases[phraseIdx];
 
-  const resetSession = (opts?: { keepStats?: boolean }) => {
-    if (!opts?.keepStats && focusCount + freeCount > 0 && category && phrase) {
-      addHistory({
-        phraseText: mode === 'focus' ? phrase.text : '(자유 대화)',
-        categoryName: category.name,
-        mode,
-        cleanCount,
-        turns: mode === 'focus' ? focusCount : freeCount,
-      });
-    }
+  const resetSession = () => {
+    // 진행상황은 매 턴 자동 저장되므로 여기선 현재 대화만 초기화
     setMessages([]);
     turnsRef.current = [];
     setFocusCount(0);
@@ -251,7 +250,7 @@ export default function ChatTab({ category, settings, addHistory, addGrammar, op
   };
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => resetSession({ keepStats: true }), [category?.id, mode, phraseIdx]);
+  useEffect(() => resetSession(), [category?.id, mode, phraseIdx]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -389,6 +388,7 @@ export default function ChatTab({ category, settings, addHistory, addGrammar, op
         const r = await focusTurn(settings.apiKey, phrase, turnsRef.current);
         turnsRef.current.push({ role: 'model', text: JSON.stringify(r) });
         if (r.clean) setCleanCount((c) => Math.min(CLEAN_GOAL, c + 1));
+        recordFocusTurn(phrase.text, r.clean); // 구문별 숙련도 + 일일 활동 자동 저장
         // 반복 문법 약점 기록 (오타 제외)
         r.grammarIssues.forEach((g) => addGrammar(g.category, g.note, r.corrected || text));
         // 교정을 내 답변 말풍선에 부착
@@ -412,6 +412,7 @@ export default function ChatTab({ category, settings, addHistory, addGrammar, op
         await pushWithSpeech(focusToMessage(r), r.question, 'q');
       } else {
         setFreeCount((c) => c + 1);
+        recordFreeTurn(); // 일일 활동 자동 저장
         const r = await freeTurn(settings.apiKey, phrases, turnsRef.current);
         turnsRef.current.push({ role: 'model', text: JSON.stringify(r) });
         await pushWithSpeech(freeToMessage(r), r.reply, '0');
@@ -640,7 +641,7 @@ export default function ChatTab({ category, settings, addHistory, addGrammar, op
 
       <div className="row" style={{ marginTop: 12, justifyContent: 'center' }}>
         <button className="btn sm ghost" onClick={() => resetSession()}>
-          ↺ 세션 초기화 (기록 저장)
+          ↺ 대화 새로 시작
         </button>
       </div>
     </div>

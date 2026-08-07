@@ -106,6 +106,75 @@ export function useGrammarStats() {
   return { grammarStats, addGrammar, clearGrammar };
 }
 
+// ── 학습 진행상황 (자동 저장) ──────────────────────────
+export interface PhraseProgress {
+  attempts: number; // 시도(집중 모드 답변) 횟수
+  clean: number; // 목표 구문을 올바르게 쓴 횟수
+}
+export interface Progress {
+  daily: Record<string, number>; // YYYY-MM-DD -> 그 날 대화 턴 수
+  phrases: Record<string, PhraseProgress>; // 구문 텍스트 -> 숙련도
+}
+
+const dayKey = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+export const todayKey = () => dayKey(new Date());
+
+export function computeStreak(daily: Record<string, number>): number {
+  const d = new Date();
+  if (!daily[dayKey(d)]) d.setDate(d.getDate() - 1); // 오늘 아직 안 했으면 어제부터
+  let streak = 0;
+  while ((daily[dayKey(d)] ?? 0) > 0) {
+    streak++;
+    d.setDate(d.getDate() - 1);
+  }
+  return streak;
+}
+export function weekCount(daily: Record<string, number>): number {
+  const d = new Date();
+  let sum = 0;
+  for (let i = 0; i < 7; i++) {
+    sum += daily[dayKey(d)] ?? 0;
+    d.setDate(d.getDate() - 1);
+  }
+  return sum;
+}
+
+export function useProgress() {
+  const [progress, setProgress] = useLocalStorage<Progress>('et.progress', { daily: {}, phrases: {} });
+
+  const recordFocusTurn = useCallback(
+    (phraseText: string, clean: boolean) => {
+      setProgress((prev) => {
+        const daily = { ...prev.daily };
+        const k = todayKey();
+        daily[k] = (daily[k] ?? 0) + 1;
+        const phrases = { ...prev.phrases };
+        const cur = phrases[phraseText] ?? { attempts: 0, clean: 0 };
+        phrases[phraseText] = { attempts: cur.attempts + 1, clean: cur.clean + (clean ? 1 : 0) };
+        return { daily, phrases };
+      });
+    },
+    [setProgress],
+  );
+
+  const recordFreeTurn = useCallback(() => {
+    setProgress((prev) => {
+      const daily = { ...prev.daily };
+      const k = todayKey();
+      daily[k] = (daily[k] ?? 0) + 1;
+      return { ...prev, daily };
+    });
+  }, [setProgress]);
+
+  const clearProgress = useCallback(
+    () => setProgress({ daily: {}, phrases: {} }),
+    [setProgress],
+  );
+
+  return { progress, recordFocusTurn, recordFreeTurn, clearProgress };
+}
+
 export function useHistory() {
   const [history, setHistory] = useLocalStorage<HistoryEntry[]>('et.history', []);
   const addHistory = useCallback(
