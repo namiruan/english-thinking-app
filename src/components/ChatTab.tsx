@@ -394,32 +394,51 @@ export default function ChatTab({ category, settings, addHistory, openSettings }
           </div>
         )}
 
-        {messages.map((m) => (
-          <div key={m.id} className={`msg ${m.role} ${m.clean ? 'clean-flag' : ''}`}>
-            {m.text && <div className="msg-text">{m.text}</div>}
-            {m.focus && (
-              <FocusView
-                focus={m.focus}
-                msgId={m.id}
-                speakingId={speakingId}
-                onSpeak={speak}
-                onStop={stopSpeaking}
-                disabled={missingKey}
-              />
-            )}
-            {m.lines?.map((line, i) => (
-              <LineView
-                key={i}
-                line={line}
-                speaking={speakingId === `${m.id}:${i}`}
-                disabled={missingKey}
-                onSpeak={() =>
-                  speakingId === `${m.id}:${i}` ? stopSpeaking() : speak(line.en, `${m.id}:${i}`)
-                }
-              />
-            ))}
-          </div>
-        ))}
+        {messages.map((m) => {
+          const hasContent = Boolean(m.focus || m.lines?.length);
+          const bubble = (
+            <div className={`msg model ${m.clean ? 'clean-flag' : ''}`}>
+              {m.focus && (
+                <FocusView
+                  focus={m.focus}
+                  msgId={m.id}
+                  speakingId={speakingId}
+                  onSpeak={speak}
+                  onStop={stopSpeaking}
+                  disabled={missingKey}
+                />
+              )}
+              {m.lines?.map((line, i) => (
+                <LineView
+                  key={i}
+                  line={line}
+                  speaking={speakingId === `${m.id}:${i}`}
+                  disabled={missingKey}
+                  onSpeak={() =>
+                    speakingId === `${m.id}:${i}` ? stopSpeaking() : speak(line.en, `${m.id}:${i}`)
+                  }
+                />
+              ))}
+            </div>
+          );
+
+          // 모델의 코치 피드백은 말풍선 밖 캡션으로, 실제 대화만 말풍선 안에
+          if (m.role === 'model' && hasContent) {
+            return (
+              <div key={m.id} className="msg-row">
+                {m.text && <div className="msg-note">{m.text}</div>}
+                {bubble}
+              </div>
+            );
+          }
+
+          // 사용자 메시지 / 에러·시스템 메시지는 기존 말풍선
+          return (
+            <div key={m.id} className={`msg ${m.role} ${m.clean ? 'clean-flag' : ''}`}>
+              {m.text && <div className="msg-text">{m.text}</div>}
+            </div>
+          );
+        })}
 
         {loading && (
           <div className="msg model">
