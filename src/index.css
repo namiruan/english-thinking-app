@@ -60,6 +60,7 @@ body {
 
 button {
   font-family: inherit;
+  color: inherit; /* 버튼이 테마 글자색을 상속 (미지정 시 브라우저 기본 검정 방지) */
   cursor: pointer;
 }
 
