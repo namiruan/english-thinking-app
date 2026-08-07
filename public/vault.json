@@ -23,5 +23,14 @@
         }
       ]
     }
-  ]
+  ],
+  "secret": {
+    "v": 1,
+    "kdf": "PBKDF2",
+    "hash": "SHA-256",
+    "iterations": 250000,
+    "salt": "X6yfnB+fdjPQg67E9rKpyw==",
+    "iv": "nNve7eiSfUt7Z/cn",
+    "ct": "uHUAqcQcc9BnQJJ7zCeBMb3g36hIfECi1rh8CEfkxSYfxOY2CJ8aRmGXs5S3UmuoD6uz2FOmPA=="
+  }
 }
