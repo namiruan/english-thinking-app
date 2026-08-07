@@ -20,7 +20,14 @@ export interface TranslatedLine {
   ko: string; // 자연스러운 한국어 번역 (숨김)
 }
 
-/** 집중 모드: 질문 + (숨김) 번역 + (숨김) 예시 답변 */
+/** 내 답변 교정 */
+export interface Correction {
+  corrected: string; // 맥락에 맞게 다듬은 자연스러운 영어 문장
+  correctedKo: string; // 그 문장의 뜻
+  reason: string; // 왜 그렇게 고쳤는지 (한국어)
+}
+
+/** 집중 모드 질문: 질문 + (숨김) 번역 + (숨김) 예시 답변 */
 export interface FocusBlock {
   question: string;
   questionKo: string;
@@ -33,10 +40,12 @@ export interface ChatMessage {
   role: 'user' | 'model';
   /** 화면에 보여줄 텍스트 (한국어 피드백/일반 텍스트) */
   text: string;
-  /** 집중 모드 블록 */
+  /** 집중 모드 질문 블록 (모델 메시지) */
   focus?: FocusBlock;
-  /** 자유 모드 응답 라인 */
+  /** 자유 모드 응답 라인 (모델 메시지) */
   lines?: TranslatedLine[];
+  /** 내 답변에 대한 교정 (사용자 메시지에 부착) */
+  correction?: Correction;
   /** 집중 모드에서 목표 구문을 올바르게 썼는지 */
   clean?: boolean;
 }

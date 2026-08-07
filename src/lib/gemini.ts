@@ -26,8 +26,11 @@ const TRANSLATION_RULE =
 
 // ── 집중 모드 (대화형) ──────────────────────────────────────
 export interface FocusResult {
-  feedback: string; // 한국어 피드백 (첫 턴이면 인사)
+  feedback: string; // 한 줄 반응/인사 (첫 턴이면 인사)
   clean: boolean; // 직전 답변에서 목표 구문을 올바르게 썼는지
+  corrected: string; // 학습자 답변을 맥락에 맞게 다듬은 영어 (첫 턴이면 "")
+  correctedKo: string; // 교정 문장의 뜻 (첫 턴이면 "")
+  correctionReason: string; // 왜 그렇게 고쳤는지 한국어 설명 (첫 턴이면 "")
   question: string; // 영어 질문 (대화체)
   questionKo: string; // 질문의 자연스러운 한국어 번역
   sampleAnswer: string; // 목표 구문을 쓴 예시 영어 답변
@@ -41,8 +44,11 @@ TARGET PHRASE: "${p.text}"
 MEANING (Korean): ${p.meaning}${p.note ? ` ${p.note}` : ''}
 
 Every turn return JSON:
-- "feedback": brief Korean feedback on the learner's previous English answer — praise + at most ONE gentle fix. On the FIRST turn (no answer yet), a one-line friendly Korean greeting.
+- "feedback": a very short Korean reaction to the learner's previous answer (e.g. "좋아요!", "거의 다 왔어요"). On the FIRST turn (no answer yet), a one-line friendly Korean greeting.
 - "clean": true ONLY if the learner's previous answer used the target phrase correctly and naturally (false on the first turn).
+- "corrected": Rewrite the learner's previous answer into the most NATURAL English that expresses what they were trying to say, in this conversation's context (fix awkward wording, grammar, word choice; keep their intent and the target phrase when appropriate). If their answer was already natural, return it lightly polished or unchanged. On the FIRST turn, "".
+- "correctedKo": natural Korean meaning of "corrected". On the FIRST turn, "".
+- "correctionReason": a short, specific Korean explanation of WHY you rewrote it that way — what sounded off and how the correction better fits the intended meaning/nuance. If it was already natural, say so briefly and note any subtle nuance. On the FIRST turn, "".
 - "question": a short, natural spoken-English question, like a real friend chatting, that naturally invites the learner to answer USING the target phrase. Vary the topic each turn.
 - "questionKo": Korean translation of "question".
 - "sampleAnswer": one natural English answer to your question that uses the target phrase — a model the learner could say.
@@ -56,12 +62,25 @@ const focusSchema = {
   properties: {
     feedback: { type: Type.STRING },
     clean: { type: Type.BOOLEAN },
+    corrected: { type: Type.STRING },
+    correctedKo: { type: Type.STRING },
+    correctionReason: { type: Type.STRING },
     question: { type: Type.STRING },
     questionKo: { type: Type.STRING },
     sampleAnswer: { type: Type.STRING },
     sampleAnswerKo: { type: Type.STRING },
   },
-  required: ['feedback', 'clean', 'question', 'questionKo', 'sampleAnswer', 'sampleAnswerKo'],
+  required: [
+    'feedback',
+    'clean',
+    'corrected',
+    'correctedKo',
+    'correctionReason',
+    'question',
+    'questionKo',
+    'sampleAnswer',
+    'sampleAnswerKo',
+  ],
 };
 
 export async function focusTurn(
@@ -90,6 +109,9 @@ export async function focusTurn(
   return {
     feedback: parsed.feedback ?? '',
     clean: Boolean(parsed.clean),
+    corrected: parsed.corrected ?? '',
+    correctedKo: parsed.correctedKo ?? '',
+    correctionReason: parsed.correctionReason ?? '',
     question: parsed.question ?? '',
     questionKo: parsed.questionKo ?? '',
     sampleAnswer: parsed.sampleAnswer ?? '',

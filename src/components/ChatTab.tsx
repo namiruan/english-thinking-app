@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type {
   Category,
   ChatMessage,
+  Correction,
   FocusBlock,
   HistoryEntry,
   Mode,
@@ -53,7 +54,68 @@ function LineView({
   );
 }
 
-// ── 집중 모드: 질문 + [번역 보기][예시 답변 보기] 동급 토글 ──
+// 스피커 버튼 (공용)
+function speakButton(
+  text: string,
+  id: string,
+  speakingId: string | null,
+  onSpeak: (t: string, i: string) => void,
+  onStop: () => void,
+  disabled: boolean,
+  cls = 'speak',
+) {
+  return (
+    <button
+      className={cls}
+      onClick={() => (speakingId === id ? onStop() : onSpeak(text, id))}
+      disabled={disabled}
+      title="원어민 음성으로 듣기"
+    >
+      {speakingId === id ? '⏸' : '🔊'}
+    </button>
+  );
+}
+
+// ── 내 답변 교정 카드 (질문 말풍선과 분리) ──
+function CorrectionCard({
+  c,
+  clean,
+  msgId,
+  speakingId,
+  onSpeak,
+  onStop,
+  disabled,
+}: {
+  c: Correction;
+  clean?: boolean;
+  msgId: string;
+  speakingId: string | null;
+  onSpeak: (t: string, i: string) => void;
+  onStop: () => void;
+  disabled: boolean;
+}) {
+  const [showKo, setShowKo] = useState(false);
+  return (
+    <div className={`correction-card ${clean ? 'clean-flag' : ''}`}>
+      <div className="tline-en">
+        {speakButton(c.corrected, `${msgId}:c`, speakingId, onSpeak, onStop, disabled)}
+        <span className="tline-text">
+          <span className="tline-tag correct">교정</span>
+          {c.corrected}
+        </span>
+      </div>
+      <div className="tline-ko-wrap">
+        <button className="tline-toggle" onClick={() => setShowKo((s) => !s)}>
+          {showKo ? '뜻 숨기기' : '뜻 보기'}
+        </button>
+        {showKo && <div className="tline-ko">{c.correctedKo}</div>}
+      </div>
+      <div className="correction-reason">💡 {c.reason}</div>
+    </div>
+  );
+}
+
+// ── 집중 모드 질문 말풍선 (항상 동일한 레이아웃) ──
 function FocusView({
   focus,
   msgId,
@@ -71,24 +133,11 @@ function FocusView({
 }) {
   const [showKo, setShowKo] = useState(false);
   const [showEx, setShowEx] = useState(false);
-  const qId = `${msgId}:q`;
-  const aId = `${msgId}:a`;
-
-  const speakBtn = (text: string, id: string, cls = 'speak') => (
-    <button
-      className={cls}
-      onClick={() => (speakingId === id ? onStop() : onSpeak(text, id))}
-      disabled={disabled}
-      title="원어민 음성으로 듣기"
-    >
-      {speakingId === id ? '⏸' : '🔊'}
-    </button>
-  );
 
   return (
     <div className="tline">
       <div className="tline-en">
-        {speakBtn(focus.question, qId)}
+        {speakButton(focus.question, `${msgId}:q`, speakingId, onSpeak, onStop, disabled)}
         <span className="tline-text">{focus.question}</span>
       </div>
       <div className="tline-ko-wrap">
@@ -104,7 +153,15 @@ function FocusView({
         {showEx && (
           <div className="tline-ko tline-ex">
             <div className="tline-ex-en">
-              {speakBtn(focus.sampleAnswer, aId, 'speak mini')}
+              {speakButton(
+                focus.sampleAnswer,
+                `${msgId}:a`,
+                speakingId,
+                onSpeak,
+                onStop,
+                disabled,
+                'speak mini',
+              )}
               <span>{focus.sampleAnswer}</span>
             </div>
             <div className="tline-ex-ko">{focus.sampleAnswerKo}</div>
@@ -269,7 +326,7 @@ export default function ChatTab({ category, settings, addHistory, openSettings }
     if (!text || loading) return;
     if (!settings.apiKey) return openSettings();
 
-    push({ role: 'user', text });
+    const userMsg = push({ role: 'user', text });
     turnsRef.current.push({ role: 'user', text });
     setInput('');
     setLoading(true);
@@ -281,6 +338,24 @@ export default function ChatTab({ category, settings, addHistory, openSettings }
         const r = await focusTurn(settings.apiKey, phrase, turnsRef.current);
         turnsRef.current.push({ role: 'model', text: JSON.stringify(r) });
         if (r.clean) setCleanCount((c) => Math.min(CLEAN_GOAL, c + 1));
+        // 교정을 내 답변 말풍선에 부착
+        if (r.corrected) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === userMsg.id
+                ? {
+                    ...m,
+                    clean: r.clean,
+                    correction: {
+                      corrected: r.corrected,
+                      correctedKo: r.correctedKo,
+                      reason: r.correctionReason,
+                    },
+                  }
+                : m,
+            ),
+          );
+        }
         await pushWithSpeech(focusToMessage(r), r.question, 'q');
       } else {
         setFreeCount((c) => c + 1);
@@ -415,46 +490,61 @@ export default function ChatTab({ category, settings, addHistory, openSettings }
         )}
 
         {messages.map((m) => {
-          const hasContent = Boolean(m.focus || m.lines?.length);
-          const bubble = (
-            <div className={`msg model ${m.clean ? 'clean-flag' : ''}`}>
-              {m.focus && (
-                <FocusView
-                  focus={m.focus}
-                  msgId={m.id}
-                  speakingId={speakingId}
-                  onSpeak={speak}
-                  onStop={stopSpeaking}
-                  disabled={missingKey}
-                />
-              )}
-              {m.lines?.map((line, i) => (
-                <LineView
-                  key={i}
-                  line={line}
-                  speaking={speakingId === `${m.id}:${i}`}
-                  disabled={missingKey}
-                  onSpeak={() =>
-                    speakingId === `${m.id}:${i}` ? stopSpeaking() : speak(line.en, `${m.id}:${i}`)
-                  }
-                />
-              ))}
-            </div>
-          );
-
-          // 모델의 코치 피드백은 말풍선 밖 캡션으로, 실제 대화만 말풍선 안에
-          if (m.role === 'model' && hasContent) {
+          // 모델: 캡션(피드백) + 질문/응답 말풍선 (항상 동일 레이아웃)
+          if (m.role === 'model' && (m.focus || m.lines?.length)) {
             return (
               <div key={m.id} className="msg-row">
                 {m.text && <div className="msg-note">{m.text}</div>}
-                {bubble}
+                <div className="msg model">
+                  {m.focus && (
+                    <FocusView
+                      focus={m.focus}
+                      msgId={m.id}
+                      speakingId={speakingId}
+                      onSpeak={speak}
+                      onStop={stopSpeaking}
+                      disabled={missingKey}
+                    />
+                  )}
+                  {m.lines?.map((line, i) => (
+                    <LineView
+                      key={i}
+                      line={line}
+                      speaking={speakingId === `${m.id}:${i}`}
+                      disabled={missingKey}
+                      onSpeak={() =>
+                        speakingId === `${m.id}:${i}` ? stopSpeaking() : speak(line.en, `${m.id}:${i}`)
+                      }
+                    />
+                  ))}
+                </div>
               </div>
             );
           }
 
-          // 사용자 메시지 / 에러·시스템 메시지는 기존 말풍선
+          // 사용자: 내 답변 말풍선 + (있으면) 교정 카드
+          if (m.role === 'user') {
+            return (
+              <div key={m.id} className="msg-row user">
+                <div className="msg user">{m.text}</div>
+                {m.correction && (
+                  <CorrectionCard
+                    c={m.correction}
+                    clean={m.clean}
+                    msgId={m.id}
+                    speakingId={speakingId}
+                    onSpeak={speak}
+                    onStop={stopSpeaking}
+                    disabled={missingKey}
+                  />
+                )}
+              </div>
+            );
+          }
+
+          // 에러·시스템 메시지
           return (
-            <div key={m.id} className={`msg ${m.role} ${m.clean ? 'clean-flag' : ''}`}>
+            <div key={m.id} className="msg model">
               {m.text && <div className="msg-text">{m.text}</div>}
             </div>
           );
