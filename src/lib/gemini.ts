@@ -10,6 +10,23 @@ function client(apiKey: string) {
   return new GoogleGenAI({ apiKey });
 }
 
+/** 일시적 과부하(503/500/UNAVAILABLE)면 잠깐 기다렸다 자동 재시도 */
+async function withRetry<T>(fn: () => Promise<T>, tries = 3): Promise<T> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < tries; attempt++) {
+    try {
+      return await fn();
+    } catch (e) {
+      lastErr = e;
+      const msg = e instanceof Error ? e.message : String(e);
+      const retriable = /\b(503|500)\b|UNAVAILABLE|overloaded|high demand|internal error/i.test(msg);
+      if (!retriable || attempt === tries - 1) throw e;
+      await new Promise((r) => setTimeout(r, 700 * Math.pow(2, attempt))); // 0.7s, 1.4s
+    }
+  }
+  throw lastErr;
+}
+
 /** 대화 히스토리를 Gemini contents 형식으로 */
 export interface Turn {
   role: 'user' | 'model';
@@ -94,16 +111,18 @@ export async function focusTurn(
       ? [{ role: 'user' as const, parts: [{ text: '연습을 시작해줘.' }] }]
       : toContents(turns);
 
-  const res = await ai.models.generateContent({
-    model: CHAT_MODEL,
-    contents,
-    config: {
-      systemInstruction: focusSystem(phrase),
-      responseMimeType: 'application/json',
-      responseSchema: focusSchema,
-      temperature: 0.9,
-    },
-  });
+  const res = await withRetry(() =>
+    ai.models.generateContent({
+      model: CHAT_MODEL,
+      contents,
+      config: {
+        systemInstruction: focusSystem(phrase),
+        responseMimeType: 'application/json',
+        responseSchema: focusSchema,
+        temperature: 0.9,
+      },
+    }),
+  );
 
   const parsed = JSON.parse(res.text ?? '{}') as Partial<FocusResult>;
   return {
@@ -159,16 +178,18 @@ export async function freeTurn(
       ? [{ role: 'user' as const, parts: [{ text: "Let's start a casual chat." }] }]
       : toContents(turns);
 
-  const res = await ai.models.generateContent({
-    model: CHAT_MODEL,
-    contents,
-    config: {
-      systemInstruction: freeSystem(phrases),
-      responseMimeType: 'application/json',
-      responseSchema: freeSchema,
-      temperature: 0.9,
-    },
-  });
+  const res = await withRetry(() =>
+    ai.models.generateContent({
+      model: CHAT_MODEL,
+      contents,
+      config: {
+        systemInstruction: freeSystem(phrases),
+        responseMimeType: 'application/json',
+        responseSchema: freeSchema,
+        temperature: 0.9,
+      },
+    }),
+  );
   const parsed = JSON.parse(res.text ?? '{}') as Partial<FreeResult>;
   return {
     reply: parsed.reply ?? '',
@@ -205,16 +226,18 @@ export async function synthesizeSpeech(
   voice = 'Kore',
 ): Promise<string> {
   const ai = client(apiKey);
-  const res = await ai.models.generateContent({
-    model: TTS_MODEL,
-    contents: [{ role: 'user', parts: [{ text }] }],
-    config: {
-      responseModalities: ['AUDIO'],
-      speechConfig: {
-        voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } },
+  const res = await withRetry(() =>
+    ai.models.generateContent({
+      model: TTS_MODEL,
+      contents: [{ role: 'user', parts: [{ text }] }],
+      config: {
+        responseModalities: ['AUDIO'],
+        speechConfig: {
+          voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } },
+        },
       },
-    },
-  });
+    }),
+  );
 
   const part = res.candidates?.[0]?.content?.parts?.[0];
   const data = part?.inlineData?.data;
@@ -232,6 +255,8 @@ export function friendlyError(e: unknown): string {
     return '요청이 너무 많거나 무료 사용량을 초과했어요. 약 1분 후 다시 시도해주세요.';
   if (/API key not valid|401|403|PERMISSION/i.test(msg))
     return 'API 키가 유효하지 않아요. 설정에서 키를 다시 확인해주세요.';
+  if (/\b(503|500)\b|UNAVAILABLE|overloaded|high demand|internal error/i.test(msg))
+    return 'Gemini 서버에 요청이 몰려 일시적으로 응답하지 못했어요. 잠시 후 다시 시도해주세요.';
   return `오류가 발생했어요: ${msg}`;
 }
 
