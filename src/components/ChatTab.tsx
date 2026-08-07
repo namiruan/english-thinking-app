@@ -175,23 +175,50 @@ export default function ChatTab({ category, settings, addHistory, openSettings }
     setSpeakingId(null);
   };
 
+  const playUrl = (url: string, id: string) => {
+    stopSpeaking();
+    setSpeakingId(id);
+    const audio = new Audio(url);
+    audioRef.current = audio;
+    audio.onended = () => {
+      URL.revokeObjectURL(url);
+      setSpeakingId((cur) => (cur === id ? null : cur));
+    };
+    audio.play().catch(() => setSpeakingId(null));
+  };
+
+  // 수동 재생 (스피커 버튼)
   const speak = async (text: string, id: string) => {
     if (!settings.apiKey || !text) return;
     stopSpeaking();
     setSpeakingId(id);
     try {
       const url = await synthesizeSpeech(settings.apiKey, text, settings.voice);
-      const audio = new Audio(url);
-      audioRef.current = audio;
-      audio.onended = () => {
-        URL.revokeObjectURL(url);
-        setSpeakingId((cur) => (cur === id ? null : cur));
-      };
-      await audio.play();
+      playUrl(url, id);
     } catch (e) {
       setSpeakingId(null);
       push({ role: 'model', text: `🔊 음성 재생 실패: ${friendlyError(e)}` });
     }
+  };
+
+  // 오디오를 먼저 합성한 뒤 텍스트와 "동시에" 노출·재생 (자동 재생용)
+  const pushWithSpeech = async (
+    data: Omit<ChatMessage, 'id'>,
+    ttsText: string,
+    suffix: string,
+  ) => {
+    if (settings.autoSpeak && settings.apiKey && ttsText) {
+      let url: string | null = null;
+      try {
+        url = await synthesizeSpeech(settings.apiKey, ttsText, settings.voice);
+      } catch {
+        /* 합성 실패 시 텍스트만 노출 */
+      }
+      const msg = push(data);
+      if (url) playUrl(url, `${msg.id}:${suffix}`);
+      return msg;
+    }
+    return push(data);
   };
 
   // 집중 모드 결과 → 메시지
@@ -213,13 +240,6 @@ export default function ChatTab({ category, settings, addHistory, openSettings }
     lines: [{ en: r.reply, ko: r.replyKo }],
   });
 
-  // 새 모델 메시지의 첫 영어(질문/응답)를 자동 재생
-  const autoSpeakFirstLine = (msg: ChatMessage) => {
-    if (!settings.autoSpeak) return;
-    if (msg.focus?.question) speak(msg.focus.question, `${msg.id}:q`);
-    else if (msg.lines?.[0]?.en) speak(msg.lines[0].en, `${msg.id}:0`);
-  };
-
   // ── 대화 시작 ──────────────────────────
   const start = async () => {
     if (!settings.apiKey) return openSettings();
@@ -230,11 +250,11 @@ export default function ChatTab({ category, settings, addHistory, openSettings }
         if (!phrase) return;
         const r = await focusTurn(settings.apiKey, phrase, turnsRef.current);
         turnsRef.current.push({ role: 'model', text: JSON.stringify(r) });
-        autoSpeakFirstLine(push(focusToMessage(r)));
+        await pushWithSpeech(focusToMessage(r), r.question, 'q');
       } else {
         const r = await freeTurn(settings.apiKey, phrases, turnsRef.current);
         turnsRef.current.push({ role: 'model', text: JSON.stringify(r) });
-        autoSpeakFirstLine(push(freeToMessage(r)));
+        await pushWithSpeech(freeToMessage(r), r.reply, '0');
       }
     } catch (e) {
       push({ role: 'model', text: `⚠️ ${friendlyError(e)}` });
@@ -261,12 +281,12 @@ export default function ChatTab({ category, settings, addHistory, openSettings }
         const r = await focusTurn(settings.apiKey, phrase, turnsRef.current);
         turnsRef.current.push({ role: 'model', text: JSON.stringify(r) });
         if (r.clean) setCleanCount((c) => Math.min(CLEAN_GOAL, c + 1));
-        autoSpeakFirstLine(push(focusToMessage(r)));
+        await pushWithSpeech(focusToMessage(r), r.question, 'q');
       } else {
         setFreeCount((c) => c + 1);
         const r = await freeTurn(settings.apiKey, phrases, turnsRef.current);
         turnsRef.current.push({ role: 'model', text: JSON.stringify(r) });
-        autoSpeakFirstLine(push(freeToMessage(r)));
+        await pushWithSpeech(freeToMessage(r), r.reply, '0');
       }
     } catch (e) {
       push({ role: 'model', text: `⚠️ ${friendlyError(e)}` });
