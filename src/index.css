@@ -447,6 +447,11 @@ select {
   background: var(--good-soft);
   border-color: transparent;
 }
+/* 교정에서 바뀐 부분 강조 */
+.chg {
+  color: var(--accent);
+  font-weight: 700;
+}
 .correction-reason {
   margin-top: 8px;
   margin-left: 36px;

@@ -54,6 +54,39 @@ function LineView({
   );
 }
 
+// 원문 대비 교정 문장에서 바뀐/추가된 단어를 표시 (LCS 단어 diff)
+function highlightChanges(original: string, corrected: string): { text: string; changed: boolean }[] {
+  const norm = (w: string) => w.toLowerCase().replace(/[^a-z0-9']/g, '');
+  const A = original.trim().split(/\s+/).filter(Boolean).map(norm);
+  const B = corrected.trim().split(/\s+/).filter(Boolean);
+  const Bn = B.map(norm);
+  const n = A.length;
+  const m = B.length;
+  if (!n) return B.map((text) => ({ text, changed: true }));
+
+  const dp: number[][] = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      dp[i][j] = A[i] === Bn[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    }
+  }
+  const matched = new Array(m).fill(false);
+  let i = 0;
+  let j = 0;
+  while (i < n && j < m) {
+    if (A[i] === Bn[j]) {
+      matched[j] = true;
+      i++;
+      j++;
+    } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+      i++;
+    } else {
+      j++;
+    }
+  }
+  return B.map((text, idx) => ({ text, changed: !matched[idx] }));
+}
+
 // 스피커 버튼 (공용)
 function speakButton(
   text: string,
@@ -79,6 +112,7 @@ function speakButton(
 // ── 내 답변 교정 카드 (질문 말풍선과 분리) ──
 function CorrectionCard({
   c,
+  original,
   clean,
   msgId,
   speakingId,
@@ -87,6 +121,7 @@ function CorrectionCard({
   disabled,
 }: {
   c: Correction;
+  original: string;
   clean?: boolean;
   msgId: string;
   speakingId: string | null;
@@ -95,13 +130,19 @@ function CorrectionCard({
   disabled: boolean;
 }) {
   const [showKo, setShowKo] = useState(false);
+  const parts = highlightChanges(original, c.corrected);
   return (
     <div className={`correction-card ${clean ? 'clean-flag' : ''}`}>
       <div className="tline-en">
         {speakButton(c.corrected, `${msgId}:c`, speakingId, onSpeak, onStop, disabled)}
         <span className="tline-text">
           <span className="tline-tag correct">교정</span>
-          {c.corrected}
+          {parts.map((p, i) => (
+            <span key={i} className={p.changed ? 'chg' : undefined}>
+              {p.text}
+              {i < parts.length - 1 ? ' ' : ''}
+            </span>
+          ))}
         </span>
       </div>
       <div className="tline-ko-wrap">
@@ -530,6 +571,7 @@ export default function ChatTab({ category, settings, addHistory, openSettings }
                 {m.correction && (
                   <CorrectionCard
                     c={m.correction}
+                    original={m.text}
                     clean={m.clean}
                     msgId={m.id}
                     speakingId={speakingId}
