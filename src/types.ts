@@ -13,13 +13,20 @@ export interface Category {
 
 export type Mode = 'focus' | 'free';
 
+/** 영어 문장 + 숨김 번역 주석 (누르면 보임) */
+export interface TranslatedLine {
+  label?: string; // 예: "질문", "예시 답변"
+  en: string; // 영어 (TTS 대상)
+  ko: string; // 자연스러운 한국어 번역 (숨김)
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'model';
-  /** 화면에 보여줄 텍스트 (한국어 피드백 등 포함 가능) */
+  /** 화면에 보여줄 텍스트 (한국어 피드백/일반 텍스트) */
   text: string;
-  /** TTS로 읽어줄 영어 문장 (있으면 스피커 버튼 노출) */
-  english?: string;
+  /** 영어 문장들 + 숨김 번역 (질문/예시 답변 등) */
+  lines?: TranslatedLine[];
   /** 집중 모드에서 목표 구문을 올바르게 썼는지 */
   clean?: boolean;
 }

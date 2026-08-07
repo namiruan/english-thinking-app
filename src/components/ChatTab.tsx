@@ -1,13 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import type { Category, ChatMessage, HistoryEntry, Mode, Phrase, Settings } from '../types';
+import { useEffect, useRef, useState } from 'react';
+import type {
+  Category,
+  ChatMessage,
+  HistoryEntry,
+  Mode,
+  Phrase,
+  Settings,
+  TranslatedLine,
+} from '../types';
 import { newId } from '../store';
-import {
-  focusTurn,
-  freeTurn,
-  friendlyError,
-  synthesizeSpeech,
-  type Turn,
-} from '../lib/gemini';
+import { focusTurn, freeTurn, friendlyError, synthesizeSpeech, type Turn } from '../lib/gemini';
 import { isSpeechRecognitionSupported, startRecognition, type Recognizer } from '../lib/speech';
 
 interface Props {
@@ -18,6 +20,36 @@ interface Props {
 }
 
 const CLEAN_GOAL = 3;
+
+// ── 영어 문장 + 숨김 번역 ─────────────────────────────
+function LineView({
+  line,
+  speaking,
+  onSpeak,
+  disabled,
+}: {
+  line: TranslatedLine;
+  speaking: boolean;
+  onSpeak: () => void;
+  disabled: boolean;
+}) {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="tline">
+      <div className="tline-en">
+        <button className="speak" onClick={onSpeak} disabled={disabled} title="원어민 음성으로 듣기">
+          {speaking ? '⏸' : '🔊'}
+        </button>
+        {line.label && <span className="tline-label">{line.label}</span>}
+        <span className="tline-text">{line.en}</span>
+      </div>
+      <button className="tline-toggle" onClick={() => setShow((s) => !s)}>
+        {show ? '번역 숨기기' : '번역 보기'}
+      </button>
+      {show && <div className="tline-ko">{line.ko}</div>}
+    </div>
+  );
+}
 
 export default function ChatTab({ category, settings, addHistory, openSettings }: Props) {
   const [mode, setMode] = useState<Mode>('focus');
@@ -34,24 +66,20 @@ export default function ChatTab({ category, settings, addHistory, openSettings }
   const recRef = useRef<Recognizer | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
-  const turnsRef = useRef<Turn[]>([]); // 모델 히스토리 (원문)
+  const turnsRef = useRef<Turn[]>([]);
 
   const phrases = category?.phrases ?? [];
   const phrase: Phrase | undefined = phrases[phraseIdx];
 
-  // 카테고리/모드/구문이 바뀌면 세션 초기화 + 기록 저장
   const resetSession = (opts?: { keepStats?: boolean }) => {
-    if (!opts?.keepStats && (focusCount + freeCount > 0)) {
-      // 이전 세션 기록 저장
-      if (category && phrase) {
-        addHistory({
-          phraseText: mode === 'focus' ? phrase.text : '(자유 대화)',
-          categoryName: category.name,
-          mode,
-          cleanCount,
-          turns: mode === 'focus' ? focusCount : freeCount,
-        });
-      }
+    if (!opts?.keepStats && focusCount + freeCount > 0 && category && phrase) {
+      addHistory({
+        phraseText: mode === 'focus' ? phrase.text : '(자유 대화)',
+        categoryName: category.name,
+        mode,
+        cleanCount,
+        turns: mode === 'focus' ? focusCount : freeCount,
+      });
     }
     setMessages([]);
     turnsRef.current = [];
@@ -102,6 +130,28 @@ export default function ChatTab({ category, settings, addHistory, openSettings }
     }
   };
 
+  // 집중 모드 결과 → 메시지
+  const focusToMessage = (r: Awaited<ReturnType<typeof focusTurn>>): Omit<ChatMessage, 'id'> => ({
+    role: 'model',
+    text: r.feedback,
+    clean: r.clean,
+    lines: [
+      { label: '질문', en: r.question, ko: r.questionKo },
+      { label: '예시 답변', en: r.sampleAnswer, ko: r.sampleAnswerKo },
+    ],
+  });
+
+  const freeToMessage = (r: Awaited<ReturnType<typeof freeTurn>>): Omit<ChatMessage, 'id'> => ({
+    role: 'model',
+    text: r.correction ? `💡 ${r.correction}` : '',
+    lines: [{ en: r.reply, ko: r.replyKo }],
+  });
+
+  // 새 모델 메시지의 첫 영어 라인을 자동 재생
+  const autoSpeakFirstLine = (msg: ChatMessage) => {
+    if (settings.autoSpeak && msg.lines?.[0]?.en) speak(msg.lines[0].en, `${msg.id}:0`);
+  };
+
   // ── 대화 시작 ──────────────────────────
   const start = async () => {
     if (!settings.apiKey) return openSettings();
@@ -111,23 +161,12 @@ export default function ChatTab({ category, settings, addHistory, openSettings }
       if (mode === 'focus') {
         if (!phrase) return;
         const r = await focusTurn(settings.apiKey, phrase, turnsRef.current);
-        const raw = JSON.stringify(r);
-        turnsRef.current.push({ role: 'model', text: raw });
-        const m = push({
-          role: 'model',
-          text: r.feedback,
-          english: r.modelSentence,
-        });
-        // situation을 별도 표시하기 위해 메시지에 붙임
-        setMessages((prev) =>
-          prev.map((x) => (x.id === m.id ? { ...x, text: `${r.feedback}\n\n📝 ${r.situation}` } : x)),
-        );
-        if (settings.autoSpeak && r.modelSentence) speak(r.modelSentence, m.id);
+        turnsRef.current.push({ role: 'model', text: JSON.stringify(r) });
+        autoSpeakFirstLine(push(focusToMessage(r)));
       } else {
         const r = await freeTurn(settings.apiKey, phrases, turnsRef.current);
-        turnsRef.current.push({ role: 'model', text: r });
-        const m = push({ role: 'model', text: r, english: extractEnglish(r) });
-        if (settings.autoSpeak) speak(extractEnglish(r), m.id);
+        turnsRef.current.push({ role: 'model', text: JSON.stringify(r) });
+        autoSpeakFirstLine(push(freeToMessage(r)));
       }
     } catch (e) {
       push({ role: 'model', text: `⚠️ ${friendlyError(e)}` });
@@ -154,19 +193,12 @@ export default function ChatTab({ category, settings, addHistory, openSettings }
         const r = await focusTurn(settings.apiKey, phrase, turnsRef.current);
         turnsRef.current.push({ role: 'model', text: JSON.stringify(r) });
         if (r.clean) setCleanCount((c) => Math.min(CLEAN_GOAL, c + 1));
-        const m = push({
-          role: 'model',
-          text: `${r.feedback}\n\n📝 ${r.situation}`,
-          english: r.modelSentence,
-          clean: r.clean,
-        });
-        if (settings.autoSpeak && r.modelSentence) speak(r.modelSentence, m.id);
+        autoSpeakFirstLine(push(focusToMessage(r)));
       } else {
         setFreeCount((c) => c + 1);
         const r = await freeTurn(settings.apiKey, phrases, turnsRef.current);
-        turnsRef.current.push({ role: 'model', text: r });
-        const m = push({ role: 'model', text: r, english: extractEnglish(r) });
-        if (settings.autoSpeak) speak(extractEnglish(r), m.id);
+        turnsRef.current.push({ role: 'model', text: JSON.stringify(r) });
+        autoSpeakFirstLine(push(freeToMessage(r)));
       }
     } catch (e) {
       push({ role: 'model', text: `⚠️ ${friendlyError(e)}` });
@@ -182,9 +214,7 @@ export default function ChatTab({ category, settings, addHistory, openSettings }
       return;
     }
     const rec = startRecognition(
-      (text, isFinal) => {
-        setInput((prev) => (isFinal ? (prev ? prev + ' ' : '') + text : prev));
-      },
+      (t, isFinal) => setInput((prev) => (isFinal ? (prev ? prev + ' ' : '') + t : prev)),
       () => {
         setRecording(false);
         recRef.current = null;
@@ -215,7 +245,7 @@ export default function ChatTab({ category, settings, addHistory, openSettings }
       <div className="modes">
         <button className={`mode ${mode === 'focus' ? 'active' : ''}`} onClick={() => setMode('focus')}>
           <div className="m-title">🎯 집중 구문 연습</div>
-          <div className="m-desc">목표 구문 하나를 반복 훈련</div>
+          <div className="m-desc">목표 구문으로 대화하며 반복</div>
         </button>
         <button className={`mode ${mode === 'free' ? 'active' : ''}`} onClick={() => setMode('free')}>
           <div className="m-title">💬 자유 실전 대화</div>
@@ -239,7 +269,9 @@ export default function ChatTab({ category, settings, addHistory, openSettings }
             </>
           ) : (
             <>
-              <div className="phrase" style={{ fontSize: 15 }}>{category.name}</div>
+              <div className="phrase" style={{ fontSize: 15 }}>
+                {category.name}
+              </div>
               <div className="meaning">{phrases.length}개 구문으로 대화</div>
             </>
           )}
@@ -248,7 +280,9 @@ export default function ChatTab({ category, settings, addHistory, openSettings }
           <div className="stats">
             <span className="chip accent">집중 {focusCount}</span>
             <span className="chip">자유 {freeCount}</span>
-            <span className="chip good">Clean {cleanCount}/{CLEAN_GOAL}</span>
+            <span className="chip good">
+              Clean {cleanCount}/{CLEAN_GOAL}
+            </span>
           </div>
           {mode === 'focus' && phrases.length > 1 && (
             <select
@@ -282,7 +316,7 @@ export default function ChatTab({ category, settings, addHistory, openSettings }
         {!started && !loading && (
           <div className="chat-empty">
             {mode === 'focus'
-              ? '🎯 목표 구문을 반복 연습해요. 아래 버튼으로 시작하세요.'
+              ? '🎯 목표 구문으로 대화하며 연습해요. 아래 버튼으로 시작하세요.'
               : '💬 자유롭게 영어로 대화해요. 아래 버튼으로 시작하세요.'}
             <div style={{ marginTop: 14 }}>
               <button className="btn primary" onClick={start} disabled={loading}>
@@ -294,20 +328,18 @@ export default function ChatTab({ category, settings, addHistory, openSettings }
 
         {messages.map((m) => (
           <div key={m.id} className={`msg ${m.role} ${m.clean ? 'clean-flag' : ''}`}>
-            {m.text}
-            {m.role === 'model' && m.english && (
-              <div className="english">
-                <button
-                  className="speak"
-                  onClick={() => (speakingId === m.id ? stopSpeaking() : speak(m.english!, m.id))}
-                  disabled={missingKey}
-                  title="원어민 음성으로 듣기"
-                >
-                  {speakingId === m.id ? '⏸' : '🔊'}
-                </button>
-                <span>{m.english}</span>
-              </div>
-            )}
+            {m.text && <div className="msg-text">{m.text}</div>}
+            {m.lines?.map((line, i) => (
+              <LineView
+                key={i}
+                line={line}
+                speaking={speakingId === `${m.id}:${i}`}
+                disabled={missingKey}
+                onSpeak={() =>
+                  speakingId === `${m.id}:${i}` ? stopSpeaking() : speak(line.en, `${m.id}:${i}`)
+                }
+              />
+            ))}
           </div>
         ))}
 
@@ -353,13 +385,4 @@ export default function ChatTab({ category, settings, addHistory, openSettings }
       </div>
     </div>
   );
-}
-
-/** 자유 모드 응답에서 TTS로 읽을 영어만 추출 (💡 교정 라인 제외) */
-function extractEnglish(text: string): string {
-  return text
-    .split('\n')
-    .filter((l) => !l.trim().startsWith('💡'))
-    .join(' ')
-    .trim();
 }

@@ -20,37 +20,48 @@ function toContents(turns: Turn[]) {
   return turns.map((t) => ({ role: t.role, parts: [{ text: t.text }] }));
 }
 
-// ── 집중 모드 ────────────────────────────────────────────────
+// 번역 원칙 (모든 번역 필드 공통)
+const TRANSLATION_RULE =
+  'Korean translations must sound NATURAL — convey the meaning the way a Korean speaker would actually say it. Not a stiff word-for-word literal translation, but also faithful with no mistranslation.';
+
+// ── 집중 모드 (대화형) ──────────────────────────────────────
 export interface FocusResult {
   feedback: string; // 한국어 피드백 (첫 턴이면 인사)
-  modelSentence: string; // 목표 구문을 쓴 자연스러운 영어 예문
-  situation: string; // 다음에 학습자가 답할 한국어 상황
   clean: boolean; // 직전 답변에서 목표 구문을 올바르게 썼는지
+  question: string; // 영어 질문 (대화체)
+  questionKo: string; // 질문의 자연스러운 한국어 번역
+  sampleAnswer: string; // 목표 구문을 쓴 예시 영어 답변
+  sampleAnswerKo: string; // 예시 답변의 자연스러운 한국어 번역
 }
 
-const focusSystem = (p: Phrase) => `You are a warm, concise English speaking coach for a Korean learner.
-The learner is drilling ONE target phrase until it feels automatic.
+const focusSystem = (p: Phrase) => `You are a warm, engaging English conversation coach for a Korean learner.
+You drill ONE target phrase through NATURAL BACK-AND-FORTH CONVERSATION until the learner can use it automatically.
 
 TARGET PHRASE: "${p.text}"
 MEANING (Korean): ${p.meaning}${p.note ? ` ${p.note}` : ''}
 
-Each turn you MUST return JSON with these fields:
-- "feedback": short Korean feedback on the learner's previous answer (praise + one fix if needed). On the very first turn (no answer yet) write a one-line Korean greeting instead.
-- "modelSentence": ONE short, natural spoken-English sentence that uses the TARGET PHRASE correctly. Vary it every turn.
-- "situation": a short Korean situation prompt (1 sentence) telling the learner what to say next, so they can reply in English using the target phrase.
-- "clean": true only if the learner's previous answer used the target phrase correctly and naturally; false otherwise (false on the first turn).
+Every turn return JSON:
+- "feedback": brief Korean feedback on the learner's previous English answer — praise + at most ONE gentle fix. On the FIRST turn (no answer yet), a one-line friendly Korean greeting.
+- "clean": true ONLY if the learner's previous answer used the target phrase correctly and naturally (false on the first turn).
+- "question": a short, natural spoken-English question, like a real friend chatting, that naturally invites the learner to answer USING the target phrase. Vary the topic each turn.
+- "questionKo": Korean translation of "question".
+- "sampleAnswer": one natural English answer to your question that uses the target phrase — a model the learner could say.
+- "sampleAnswerKo": Korean translation of "sampleAnswer".
 
-Rules: keep everything short, no filler, no markdown. Only the target phrase drilling — no unrelated chit-chat.`;
+${TRANSLATION_RULE}
+Keep English short and conversational. No markdown, no filler.`;
 
 const focusSchema = {
   type: Type.OBJECT,
   properties: {
     feedback: { type: Type.STRING },
-    modelSentence: { type: Type.STRING },
-    situation: { type: Type.STRING },
     clean: { type: Type.BOOLEAN },
+    question: { type: Type.STRING },
+    questionKo: { type: Type.STRING },
+    sampleAnswer: { type: Type.STRING },
+    sampleAnswerKo: { type: Type.STRING },
   },
-  required: ['feedback', 'modelSentence', 'situation', 'clean'],
+  required: ['feedback', 'clean', 'question', 'questionKo', 'sampleAnswer', 'sampleAnswerKo'],
 };
 
 export async function focusTurn(
@@ -78,28 +89,48 @@ export async function focusTurn(
   const parsed = JSON.parse(res.text ?? '{}') as Partial<FocusResult>;
   return {
     feedback: parsed.feedback ?? '',
-    modelSentence: parsed.modelSentence ?? '',
-    situation: parsed.situation ?? '',
     clean: Boolean(parsed.clean),
+    question: parsed.question ?? '',
+    questionKo: parsed.questionKo ?? '',
+    sampleAnswer: parsed.sampleAnswer ?? '',
+    sampleAnswerKo: parsed.sampleAnswerKo ?? '',
   };
 }
 
 // ── 자유 모드 ────────────────────────────────────────────────
+export interface FreeResult {
+  reply: string; // 영어 응답
+  replyKo: string; // 자연스러운 한국어 번역
+  correction: string; // 한국어 교정 (없으면 빈 문자열)
+}
+
 const freeSystem = (phrases: Phrase[]) => `You are a friendly native English conversation partner for a Korean learner.
 Have a light, natural spoken conversation. Naturally create chances for the learner to use these target phrases:
 ${phrases.map((p) => `- "${p.text}" (${p.meaning})`).join('\n')}
 
-Rules:
-- Reply in natural, SHORT spoken English (1-3 sentences).
-- If the learner makes a notable mistake, add ONE short gentle correction on a new line prefixed with "💡".
-- Keep the conversation flowing with a follow-up question.
-- No markdown headers, no long paragraphs.`;
+Every turn return JSON:
+- "reply": natural, SHORT spoken English (1-3 sentences) that keeps the conversation flowing with a follow-up question.
+- "replyKo": Korean translation of "reply".
+- "correction": if the learner made a notable mistake, ONE short gentle correction in Korean; otherwise "".
+
+${TRANSLATION_RULE}
+No markdown, no long paragraphs.`;
+
+const freeSchema = {
+  type: Type.OBJECT,
+  properties: {
+    reply: { type: Type.STRING },
+    replyKo: { type: Type.STRING },
+    correction: { type: Type.STRING },
+  },
+  required: ['reply', 'replyKo', 'correction'],
+};
 
 export async function freeTurn(
   apiKey: string,
   phrases: Phrase[],
   turns: Turn[],
-): Promise<string> {
+): Promise<FreeResult> {
   const ai = client(apiKey);
   const contents =
     turns.length === 0
@@ -111,10 +142,17 @@ export async function freeTurn(
     contents,
     config: {
       systemInstruction: freeSystem(phrases),
+      responseMimeType: 'application/json',
+      responseSchema: freeSchema,
       temperature: 0.9,
     },
   });
-  return (res.text ?? '').trim();
+  const parsed = JSON.parse(res.text ?? '{}') as Partial<FreeResult>;
+  return {
+    reply: parsed.reply ?? '',
+    replyKo: parsed.replyKo ?? '',
+    correction: parsed.correction ?? '',
+  };
 }
 
 // ── 사전 / 뜻 보기 ────────────────────────────────────────────
