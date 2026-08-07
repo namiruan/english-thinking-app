@@ -33,44 +33,46 @@ function LineView({
   onSpeak: () => void;
   disabled: boolean;
 }) {
-  const [revealed, setRevealed] = useState(!line.collapsible);
+  const [open, setOpen] = useState(!line.collapsible); // 접히는 라인은 기본 닫힘
   const [showKo, setShowKo] = useState(false);
 
-  // 예시 답변: 클릭해서 펼치기 전
-  if (!revealed) {
-    return (
-      <button className="hint-btn" onClick={() => setRevealed(true)}>
-        💡 {line.label ?? '예시'} 보기
-      </button>
-    );
-  }
-
-  return (
-    <div className="tline">
+  const body = (
+    <>
       <div className="tline-en">
         <button className="speak" onClick={onSpeak} disabled={disabled} title="원어민 음성으로 듣기">
           {speaking ? '⏸' : '🔊'}
         </button>
         <span className="tline-text">
-          {line.label && <span className="tline-tag">{line.label}</span>}
+          {!line.collapsible && line.label && <span className="tline-tag">{line.label}</span>}
           {line.en}
         </span>
       </div>
       <div className="tline-ko-wrap">
-        <div className="tline-actions">
-          <button className="tline-toggle" onClick={() => setShowKo((s) => !s)}>
-            {showKo ? '번역 숨기기' : '번역 보기'}
-          </button>
-          {line.collapsible && (
-            <button className="tline-toggle" onClick={() => setRevealed(false)}>
-              {line.label ?? '예시'} 숨기기
-            </button>
-          )}
-        </div>
+        <button className="tline-toggle" onClick={() => setShowKo((s) => !s)}>
+          {showKo ? '번역 숨기기' : '번역 보기'}
+        </button>
         {showKo && <div className="tline-ko">{line.ko}</div>}
       </div>
-    </div>
+    </>
   );
+
+  // 예시 답변: 같은 자리에서 열고 닫는 아코디언
+  if (line.collapsible) {
+    return (
+      <div className="tline">
+        <button
+          className={`disclosure ${open ? 'open' : ''}`}
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+        >
+          <span className="disclosure-caret">▸</span>💡 {line.label ?? '예시'}
+        </button>
+        {open && <div className="tline-body">{body}</div>}
+      </div>
+    );
+  }
+
+  return <div className="tline">{body}</div>;
 }
 
 export default function ChatTab({ category, settings, addHistory, openSettings }: Props) {
