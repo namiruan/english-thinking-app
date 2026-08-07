@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Category, Settings } from './types';
 import { defaultSettings, seedCategories, useHistory, useLocalStorage } from './store';
+import { loadVault, type Vault } from './lib/vault';
 import ChatTab from './components/ChatTab';
 import RegisterTab from './components/RegisterTab';
 import HistoryTab from './components/HistoryTab';
 import SettingsModal from './components/SettingsModal';
+import UnlockModal from './components/UnlockModal';
 
 type Tab = 'register' | 'chat' | 'history';
 
@@ -20,8 +22,54 @@ export default function App() {
   const [tab, setTab] = useState<Tab>('chat');
   const [showSettings, setShowSettings] = useState(false);
 
-  const activeCat =
-    categories.find((c) => c.id === activeCatId) ?? categories[0];
+  // 잠금 / vault
+  const [vault, setVault] = useState<Vault | null>(null);
+  const [booted, setBooted] = useState(false);
+  const [sessionKey, setSessionKey] = useState<string | null>(null);
+  const [skipUnlock, setSkipUnlock] = useState(false);
+
+  // 부팅: vault 로드 + 최초 구문 시드
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const v = await loadVault();
+      if (!alive) return;
+      setVault(v);
+      if (!localStorage.getItem('et.initialized')) {
+        const phrases = v?.phrases?.length ? v.phrases : seedCategories;
+        setCategories(phrases);
+        setActiveCatId(phrases[0]?.id ?? '');
+        localStorage.setItem('et.initialized', '1');
+      }
+      setBooted(true);
+    })();
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const effectiveKey = settings.apiKey || sessionKey || '';
+  const effectiveSettings: Settings = useMemo(
+    () => ({ ...settings, apiKey: effectiveKey }),
+    [settings, effectiveKey],
+  );
+
+  const needUnlock = booted && !!vault?.secret && !effectiveKey && !skipUnlock;
+
+  const activeCat = categories.find((c) => c.id === activeCatId) ?? categories[0];
+
+  const handleUnlock = (key: string, remember: boolean) => {
+    if (remember) setSettings((s) => ({ ...s, apiKey: key }));
+    else setSessionKey(key);
+  };
+
+  const clearKey = () => {
+    setSettings((s) => ({ ...s, apiKey: '' }));
+    setSessionKey(null);
+    setSkipUnlock(false);
+    setShowSettings(false);
+  };
 
   return (
     <div className="app">
@@ -62,7 +110,7 @@ export default function App() {
       {tab === 'chat' && (
         <ChatTab
           category={activeCat}
-          settings={settings}
+          settings={effectiveSettings}
           addHistory={addHistory}
           openSettings={() => setShowSettings(true)}
         />
@@ -72,14 +120,26 @@ export default function App() {
 
       {showSettings && (
         <SettingsModal
-          settings={settings}
+          settings={effectiveSettings}
+          categories={categories}
+          vaultSecret={vault?.secret}
+          hasKey={!!effectiveKey}
           onSave={setSettings}
+          onClearKey={clearKey}
           onClose={() => setShowSettings(false)}
         />
       )}
 
+      {needUnlock && vault?.secret && (
+        <UnlockModal
+          secret={vault.secret}
+          onUnlock={handleUnlock}
+          onSkip={() => setSkipUnlock(true)}
+        />
+      )}
+
       <footer className="footer">
-        영어식 사고 · Gemini 2.5 Flash + Native Audio TTS · 로컬 저장
+        영어식 사고 · Gemini 2.5 Flash + Native Audio TTS · git 저장
       </footer>
     </div>
   );

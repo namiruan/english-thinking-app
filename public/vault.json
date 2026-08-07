@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "phrases": [
+    {
+      "id": "cat-first",
+      "name": "입에 척 달라붙는 첫 구문들",
+      "phrases": [
+        {
+          "id": "p-starting-to-like",
+          "text": "be starting to like",
+          "meaning": "~을(를) 점점 좋아하게 되다",
+          "note": "(+ 동사원형/명사)"
+        },
+        {
+          "id": "p-end-up",
+          "text": "end up (+ -ing)",
+          "meaning": "결국 ~하게 되다"
+        },
+        {
+          "id": "p-supposed-to",
+          "text": "be supposed to",
+          "meaning": "~하기로 되어 있다 / ~해야 한다"
+        }
+      ]
+    }
+  ]
+}
