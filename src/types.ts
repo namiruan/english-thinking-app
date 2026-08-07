@@ -34,8 +34,17 @@ export interface HistoryEntry {
   date: string; // ISO
 }
 
+export interface GitHubConfig {
+  token: string;
+  owner: string;
+  repo: string;
+  path: string;
+  branch: string;
+}
+
 export interface Settings {
   apiKey: string;
   voice: string; // Gemini TTS 음성 이름
   autoSpeak: boolean; // AI 응답 자동 재생
+  github?: GitHubConfig; // 앱에서 GitHub에 바로 저장할 때 사용
 }

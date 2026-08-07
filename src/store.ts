@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { Category, HistoryEntry, Settings } from './types';
+import type { Category, GitHubConfig, HistoryEntry, Settings } from './types';
 
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 
@@ -53,10 +53,19 @@ export const seedCategories: Category[] = [
   },
 ];
 
+export const defaultGitHub: GitHubConfig = {
+  token: '',
+  owner: 'namiruan',
+  repo: 'english-thinking-app',
+  path: 'public/vault.json',
+  branch: 'main',
+};
+
 export const defaultSettings: Settings = {
   apiKey: (import.meta.env.VITE_GEMINI_API_KEY as string | undefined) ?? '',
   voice: 'Kore',
   autoSpeak: true,
+  github: defaultGitHub,
 };
 
 export function useHistory() {

@@ -37,16 +37,20 @@ npm run dev
 - **API 키**는 **비밀번호로 암호화(AES-GCM)** 되어 암호문만 저장됩니다. 원본 키는 저장되지 않아요.
   공개 저장소여도 **비밀번호를 모르면 키를 꺼낼 수 없습니다.**
 
-### 잠금 설정 방법
+### 잠금 설정 방법 (앱에서 GitHub에 자동 저장)
 
-1. 앱 우측 상단 **⚙ 설정** → 맨 아래 **🔐 git에 저장** 섹션
-2. API 키 + 비밀번호(강하게!) 입력 → **암호화 파일 만들기**
-3. 생성된 내용을 **⬇ 다운로드** 하거나 **📋 복사** → 프로젝트의 `public/vault.json`에 덮어쓰기
-4. 커밋 & 푸시:
-   ```bash
-   git add public/vault.json && git commit -m "update vault" && git push
-   ```
-5. 이제 사이트에 처음 들어오면 **비밀번호 입력창(잠금 해제)** 이 뜨고, 맞게 입력하면 대화가 시작됩니다.
+1. **fine-grained GitHub 토큰 발급** (한 번만):
+   - https://github.com/settings/personal-access-tokens/new
+   - **Repository access** → *Only select repositories* → `english-thinking-app`
+   - **Permissions** → *Repository permissions* → **Contents: Read and write**
+   - 생성된 `github_pat_...` 토큰 복사
+2. 앱 **⚙ 설정** → **🔐 git에 저장** 섹션
+   - **암호화할 API 키** + **비밀번호**(강하게!) 입력
+   - **GitHub 토큰** 붙여넣기 (이 브라우저에만 저장됨)
+3. **🚀 GitHub에 바로 저장** 클릭 → 앱이 `public/vault.json`을 직접 커밋 → **약 30초 후 라이브 자동 반영**
+4. 이제 사이트에 처음 들어오면 **비밀번호 입력창(잠금 해제)** 이 뜨고, 맞게 입력하면 대화가 시작됩니다.
+
+> 토큰 없이 쓰려면 **파일만 만들기** → ⬇ 다운로드 → `public/vault.json`에 덮어쓰고 직접 `git push` 해도 됩니다.
 
 > ⚠️ **비밀번호는 반드시 강하게** (긴 문구 권장). 약한 비밀번호는 공개된 암호문에서 오프라인으로 뚫릴 수 있어요.
 > 키가 새더라도 `aistudio.google.com`에서 즉시 폐기·재발급할 수 있습니다.
