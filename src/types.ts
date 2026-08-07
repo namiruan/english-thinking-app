@@ -60,6 +60,14 @@ export interface HistoryEntry {
   date: string; // ISO
 }
 
+export interface WordEntry {
+  term: string; // 단어/숙어
+  english: string; // 영어 풀이
+  korean: string; // 한국어 뜻
+  count: number; // 저장/노출 횟수
+  date: string; // 마지막 ISO
+}
+
 export interface GitHubConfig {
   token: string;
   owner: string;

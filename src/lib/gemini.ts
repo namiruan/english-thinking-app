@@ -79,7 +79,12 @@ export interface FocusResult {
   sampleAnswerKo: string; // 예시 답변의 자연스러운 한국어 번역
 }
 
-const focusSystem = (p: Phrase) => `You are a warm, engaging English conversation coach for a Korean learner.
+const studyWordsLine = (words: string[]) =>
+  words.length
+    ? `\n\nThe learner is studying these words/phrases — naturally reuse a few of them in your questions/examples when it fits (helps them review): ${words.join(', ')}.`
+    : '';
+
+const focusSystem = (p: Phrase, studyWords: string[]) => `You are a warm, engaging English conversation coach for a Korean learner.
 You drill ONE target phrase through NATURAL BACK-AND-FORTH CONVERSATION until the learner can use it automatically.
 
 TARGET PHRASE: "${p.text}"
@@ -98,7 +103,7 @@ Every turn return JSON:
 - "sampleAnswerKo": Korean translation of "sampleAnswer".
 
 ${TRANSLATION_RULE}
-Keep English short and conversational. No markdown, no filler.`;
+Keep English short and conversational. No markdown, no filler.${studyWordsLine(studyWords)}`;
 
 const focusSchema = {
   type: Type.OBJECT,
@@ -142,6 +147,7 @@ export async function focusTurn(
   apiKey: string,
   phrase: Phrase,
   turns: Turn[],
+  studyWords: string[] = [],
 ): Promise<FocusResult> {
   const ai = client(apiKey);
   const contents =
@@ -154,7 +160,7 @@ export async function focusTurn(
       model: CHAT_MODEL,
       contents,
       config: {
-        systemInstruction: focusSystem(phrase),
+        systemInstruction: focusSystem(phrase, studyWords),
         responseMimeType: 'application/json',
         responseSchema: focusSchema,
         temperature: 0.9,
@@ -188,9 +194,9 @@ export interface FreeResult {
   correction: string; // 한국어 교정 (없으면 빈 문자열)
 }
 
-const freeSystem = (phrases: Phrase[]) => `You are a friendly native English conversation partner for a Korean learner.
+const freeSystem = (phrases: Phrase[], studyWords: string[]) => `You are a friendly native English conversation partner for a Korean learner.
 Have a light, natural spoken conversation. Naturally create chances for the learner to use these target phrases:
-${phrases.map((p) => `- "${p.text}" (${p.meaning})`).join('\n')}
+${phrases.map((p) => `- "${p.text}" (${p.meaning})`).join('\n')}${studyWordsLine(studyWords)}
 
 Every turn return JSON:
 - "reply": natural, SHORT spoken English (1-3 sentences) that keeps the conversation flowing with a follow-up question.
@@ -214,6 +220,7 @@ export async function freeTurn(
   apiKey: string,
   phrases: Phrase[],
   turns: Turn[],
+  studyWords: string[] = [],
 ): Promise<FreeResult> {
   const ai = client(apiKey);
   const contents =
@@ -226,7 +233,7 @@ export async function freeTurn(
       model: CHAT_MODEL,
       contents,
       config: {
-        systemInstruction: freeSystem(phrases),
+        systemInstruction: freeSystem(phrases, studyWords),
         responseMimeType: 'application/json',
         responseSchema: freeSchema,
         temperature: 0.9,
@@ -238,6 +245,51 @@ export async function freeTurn(
     reply: parsed.reply ?? '',
     replyKo: parsed.replyKo ?? '',
     correction: parsed.correction ?? '',
+  };
+}
+
+// ── 드래그 사전 조회 ──────────────────────────────────────────
+export interface LookupResult {
+  term: string;
+  partOfSpeech: string; // 품사/유형 (verb, idiom 등)
+  english: string; // 영어 풀이
+  korean: string; // 한국어 뜻
+}
+
+const lookupSchema = {
+  type: Type.OBJECT,
+  properties: {
+    partOfSpeech: { type: Type.STRING },
+    english: { type: Type.STRING },
+    korean: { type: Type.STRING },
+  },
+  required: ['partOfSpeech', 'english', 'korean'],
+};
+
+export async function lookupTerm(apiKey: string, term: string): Promise<LookupResult> {
+  const ai = client(apiKey);
+  const res = await withRetry(() =>
+    ai.models.generateContent({
+      model: CHAT_MODEL,
+      contents: [{ role: 'user', parts: [{ text: `Define: "${term}"` }] }],
+      config: {
+        systemInstruction: `You are a concise bilingual (English-Korean) dictionary. For the given English word or phrase/idiom, return JSON:
+- "partOfSpeech": short type label (e.g. "verb", "noun", "idiom", "phrasal verb") or "".
+- "english": a concise English definition (1 sentence) of the whole word/phrase.
+- "korean": a natural, short Korean meaning.
+If it's an idiom or multi-word phrase, define the whole expression, not individual words. Keep it short.`,
+        responseMimeType: 'application/json',
+        responseSchema: lookupSchema,
+        temperature: 0.3,
+      },
+    }),
+  );
+  const p = JSON.parse(res.text ?? '{}') as Partial<LookupResult>;
+  return {
+    term,
+    partOfSpeech: p.partOfSpeech ?? '',
+    english: p.english ?? '',
+    korean: p.korean ?? '',
   };
 }
 

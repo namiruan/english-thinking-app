@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { Category, GitHubConfig, HistoryEntry, Settings } from './types';
+import type { Category, GitHubConfig, HistoryEntry, Settings, WordEntry } from './types';
 
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 
@@ -173,6 +173,39 @@ export function useProgress() {
   );
 
   return { progress, recordFocusTurn, recordFreeTurn, clearProgress };
+}
+
+// ── 단어장 ──────────────────────────────────────────────
+export function useWordbook() {
+  const [words, setWords] = useLocalStorage<Record<string, WordEntry>>('et.wordbook', {});
+  const addWord = useCallback(
+    (w: Pick<WordEntry, 'term' | 'english' | 'korean'>) => {
+      const key = w.term.trim().toLowerCase();
+      if (!key) return;
+      setWords((prev) => ({
+        ...prev,
+        [key]: {
+          term: w.term.trim(),
+          english: w.english,
+          korean: w.korean,
+          count: (prev[key]?.count ?? 0) + 1,
+          date: new Date().toISOString(),
+        },
+      }));
+    },
+    [setWords],
+  );
+  const removeWord = useCallback(
+    (term: string) =>
+      setWords((prev) => {
+        const next = { ...prev };
+        delete next[term.trim().toLowerCase()];
+        return next;
+      }),
+    [setWords],
+  );
+  const clearWords = useCallback(() => setWords({}), [setWords]);
+  return { words, addWord, removeWord, clearWords };
 }
 
 export function useHistory() {

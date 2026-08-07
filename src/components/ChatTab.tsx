@@ -19,6 +19,7 @@ interface Props {
   recordFocusTurn: (phraseText: string, clean: boolean) => void;
   recordFreeTurn: () => void;
   addGrammar: (category: string, note: string, example: string) => void;
+  studyWords: string[];
   openSettings: () => void;
 }
 
@@ -218,6 +219,7 @@ export default function ChatTab({
   recordFocusTurn,
   recordFreeTurn,
   addGrammar,
+  studyWords,
   openSettings,
 }: Props) {
   const [mode, setMode] = useState<Mode>('focus');
@@ -355,11 +357,11 @@ export default function ChatTab({
     try {
       if (mode === 'focus') {
         if (!phrase) return;
-        const r = await focusTurn(settings.apiKey, phrase, turnsRef.current);
+        const r = await focusTurn(settings.apiKey, phrase, turnsRef.current, studyWords);
         turnsRef.current.push({ role: 'model', text: JSON.stringify(r) });
         await pushWithSpeech(focusToMessage(r), r.question, 'q');
       } else {
-        const r = await freeTurn(settings.apiKey, phrases, turnsRef.current);
+        const r = await freeTurn(settings.apiKey, phrases, turnsRef.current, studyWords);
         turnsRef.current.push({ role: 'model', text: JSON.stringify(r) });
         await pushWithSpeech(freeToMessage(r), r.reply, '0');
       }
@@ -385,7 +387,7 @@ export default function ChatTab({
       if (mode === 'focus') {
         if (!phrase) return;
         setFocusCount((c) => c + 1);
-        const r = await focusTurn(settings.apiKey, phrase, turnsRef.current);
+        const r = await focusTurn(settings.apiKey, phrase, turnsRef.current, studyWords);
         turnsRef.current.push({ role: 'model', text: JSON.stringify(r) });
         if (r.clean) setCleanCount((c) => Math.min(CLEAN_GOAL, c + 1));
         recordFocusTurn(phrase.text, r.clean); // 구문별 숙련도 + 일일 활동 자동 저장
@@ -413,7 +415,7 @@ export default function ChatTab({
       } else {
         setFreeCount((c) => c + 1);
         recordFreeTurn(); // 일일 활동 자동 저장
-        const r = await freeTurn(settings.apiKey, phrases, turnsRef.current);
+        const r = await freeTurn(settings.apiKey, phrases, turnsRef.current, studyWords);
         turnsRef.current.push({ role: 'model', text: JSON.stringify(r) });
         await pushWithSpeech(freeToMessage(r), r.reply, '0');
       }

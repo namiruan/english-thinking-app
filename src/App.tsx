@@ -5,16 +5,19 @@ import {
   seedCategories,
   useGrammarStats,
   useProgress,
+  useWordbook,
   useLocalStorage,
 } from './store';
 import { loadVault, type Vault } from './lib/vault';
 import ChatTab from './components/ChatTab';
 import RegisterTab from './components/RegisterTab';
 import HistoryTab from './components/HistoryTab';
+import WordbookTab from './components/WordbookTab';
 import SettingsModal from './components/SettingsModal';
 import UnlockModal from './components/UnlockModal';
+import SelectionLookup from './components/SelectionLookup';
 
-type Tab = 'register' | 'chat' | 'history';
+type Tab = 'register' | 'chat' | 'history' | 'wordbook';
 
 export default function App() {
   const [categories, setCategories] = useLocalStorage<Category[]>('et.categories', seedCategories);
@@ -25,6 +28,17 @@ export default function App() {
   );
   const { progress, recordFocusTurn, recordFreeTurn, clearProgress } = useProgress();
   const { grammarStats, addGrammar, clearGrammar } = useGrammarStats();
+  const { words, addWord, removeWord, clearWords } = useWordbook();
+
+  // 복습용 단어 (많이 저장된 순 상위 8개) → 대화에 재노출
+  const studyWords = useMemo(
+    () =>
+      Object.values(words)
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 8)
+        .map((w) => w.term),
+    [words],
+  );
 
   const [tab, setTab] = useState<Tab>('chat');
   const [showSettings, setShowSettings] = useState(false);
@@ -103,6 +117,9 @@ export default function App() {
         <button className={`tab ${tab === 'history' ? 'active' : ''}`} onClick={() => setTab('history')}>
           기록
         </button>
+        <button className={`tab ${tab === 'wordbook' ? 'active' : ''}`} onClick={() => setTab('wordbook')}>
+          단어장
+        </button>
       </nav>
 
       {tab === 'register' && (
@@ -122,6 +139,7 @@ export default function App() {
           recordFocusTurn={recordFocusTurn}
           recordFreeTurn={recordFreeTurn}
           addGrammar={addGrammar}
+          studyWords={studyWords}
           openSettings={() => setShowSettings(true)}
         />
       </div>
@@ -133,6 +151,10 @@ export default function App() {
           grammarStats={grammarStats}
           clearGrammar={clearGrammar}
         />
+      )}
+
+      {tab === 'wordbook' && (
+        <WordbookTab words={words} removeWord={removeWord} clearWords={clearWords} />
       )}
 
       {showSettings && (
@@ -154,6 +176,9 @@ export default function App() {
           onSkip={() => setSkipUnlock(true)}
         />
       )}
+
+      {/* 드래그 사전 조회 팝업 */}
+      <SelectionLookup apiKey={effectiveKey} onAdd={addWord} />
 
       <footer className="footer">
         영어식 사고 · Gemini 2.5 Flash + Native Audio TTS · git 저장
