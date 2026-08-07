@@ -113,7 +113,6 @@ function speakButton(
 function CorrectionCard({
   c,
   original,
-  clean,
   msgId,
   speakingId,
   onSpeak,
@@ -122,7 +121,6 @@ function CorrectionCard({
 }: {
   c: Correction;
   original: string;
-  clean?: boolean;
   msgId: string;
   speakingId: string | null;
   onSpeak: (t: string, i: string) => void;
@@ -132,7 +130,7 @@ function CorrectionCard({
   const [showKo, setShowKo] = useState(false);
   const parts = highlightChanges(original, c.corrected);
   return (
-    <div className={`correction-card ${clean ? 'clean-flag' : ''}`}>
+    <div className="correction-card">
       <div className="tline-en">
         {speakButton(c.corrected, `${msgId}:c`, speakingId, onSpeak, onStop, disabled)}
         <span className="tline-text">
@@ -572,7 +570,6 @@ export default function ChatTab({ category, settings, addHistory, openSettings }
                   <CorrectionCard
                     c={m.correction}
                     original={m.text}
-                    clean={m.clean}
                     msgId={m.id}
                     speakingId={speakingId}
                     onSpeak={speak}
