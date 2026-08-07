@@ -13,12 +13,19 @@ export interface Category {
 
 export type Mode = 'focus' | 'free';
 
-/** 영어 문장 + 숨김 번역 주석 (누르면 보임) */
+/** 영어 문장 + 숨김 번역 주석 (누르면 보임) — 자유 모드 응답 */
 export interface TranslatedLine {
-  label?: string; // 예: "질문", "예시 답변"
+  label?: string;
   en: string; // 영어 (TTS 대상)
   ko: string; // 자연스러운 한국어 번역 (숨김)
-  collapsible?: boolean; // true면 영어도 클릭해야 보임 (예시 답변)
+}
+
+/** 집중 모드: 질문 + (숨김) 번역 + (숨김) 예시 답변 */
+export interface FocusBlock {
+  question: string;
+  questionKo: string;
+  sampleAnswer: string;
+  sampleAnswerKo: string;
 }
 
 export interface ChatMessage {
@@ -26,7 +33,9 @@ export interface ChatMessage {
   role: 'user' | 'model';
   /** 화면에 보여줄 텍스트 (한국어 피드백/일반 텍스트) */
   text: string;
-  /** 영어 문장들 + 숨김 번역 (질문/예시 답변 등) */
+  /** 집중 모드 블록 */
+  focus?: FocusBlock;
+  /** 자유 모드 응답 라인 */
   lines?: TranslatedLine[];
   /** 집중 모드에서 목표 구문을 올바르게 썼는지 */
   clean?: boolean;

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type {
   Category,
   ChatMessage,
+  FocusBlock,
   HistoryEntry,
   Mode,
   Phrase,
@@ -21,7 +22,7 @@ interface Props {
 
 const CLEAN_GOAL = 3;
 
-// ── 영어 문장 + 숨김 번역 ─────────────────────────────
+// ── 자유 모드 응답: 영어 + 숨김 번역 ──────────────────
 function LineView({
   line,
   speaking,
@@ -33,19 +34,14 @@ function LineView({
   onSpeak: () => void;
   disabled: boolean;
 }) {
-  const [open, setOpen] = useState(!line.collapsible); // 접히는 라인은 기본 닫힘
   const [showKo, setShowKo] = useState(false);
-
-  const body = (
-    <>
+  return (
+    <div className="tline">
       <div className="tline-en">
         <button className="speak" onClick={onSpeak} disabled={disabled} title="원어민 음성으로 듣기">
           {speaking ? '⏸' : '🔊'}
         </button>
-        <span className="tline-text">
-          {!line.collapsible && line.label && <span className="tline-tag">{line.label}</span>}
-          {line.en}
-        </span>
+        <span className="tline-text">{line.en}</span>
       </div>
       <div className="tline-ko-wrap">
         <button className="tline-toggle" onClick={() => setShowKo((s) => !s)}>
@@ -53,26 +49,70 @@ function LineView({
         </button>
         {showKo && <div className="tline-ko">{line.ko}</div>}
       </div>
-    </>
+    </div>
+  );
+}
+
+// ── 집중 모드: 질문 + [번역 보기][예시 답변 보기] 동급 토글 ──
+function FocusView({
+  focus,
+  msgId,
+  speakingId,
+  onSpeak,
+  onStop,
+  disabled,
+}: {
+  focus: FocusBlock;
+  msgId: string;
+  speakingId: string | null;
+  onSpeak: (text: string, id: string) => void;
+  onStop: () => void;
+  disabled: boolean;
+}) {
+  const [showKo, setShowKo] = useState(false);
+  const [showEx, setShowEx] = useState(false);
+  const qId = `${msgId}:q`;
+  const aId = `${msgId}:a`;
+
+  const speakBtn = (text: string, id: string, cls = 'speak') => (
+    <button
+      className={cls}
+      onClick={() => (speakingId === id ? onStop() : onSpeak(text, id))}
+      disabled={disabled}
+      title="원어민 음성으로 듣기"
+    >
+      {speakingId === id ? '⏸' : '🔊'}
+    </button>
   );
 
-  // 예시 답변: 같은 자리에서 열고 닫는 아코디언
-  if (line.collapsible) {
-    return (
-      <div className="tline">
-        <button
-          className={`disclosure ${open ? 'open' : ''}`}
-          onClick={() => setOpen((o) => !o)}
-          aria-expanded={open}
-        >
-          <span className="disclosure-caret">▸</span>💡 {line.label ?? '예시'}
-        </button>
-        {open && <div className="tline-body">{body}</div>}
+  return (
+    <div className="tline">
+      <div className="tline-en">
+        {speakBtn(focus.question, qId)}
+        <span className="tline-text">{focus.question}</span>
       </div>
-    );
-  }
-
-  return <div className="tline">{body}</div>;
+      <div className="tline-ko-wrap">
+        <div className="tline-actions">
+          <button className="tline-toggle" onClick={() => setShowKo((s) => !s)}>
+            {showKo ? '번역 숨기기' : '번역 보기'}
+          </button>
+          <button className="tline-toggle" onClick={() => setShowEx((s) => !s)}>
+            {showEx ? '예시 답변 숨기기' : '예시 답변 보기'}
+          </button>
+        </div>
+        {showKo && <div className="tline-ko">{focus.questionKo}</div>}
+        {showEx && (
+          <div className="tline-ko tline-ex">
+            <div className="tline-ex-en">
+              {speakBtn(focus.sampleAnswer, aId, 'speak mini')}
+              <span>{focus.sampleAnswer}</span>
+            </div>
+            <div className="tline-ex-ko">{focus.sampleAnswerKo}</div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export default function ChatTab({ category, settings, addHistory, openSettings }: Props) {
@@ -159,10 +199,12 @@ export default function ChatTab({ category, settings, addHistory, openSettings }
     role: 'model',
     text: r.feedback,
     clean: r.clean,
-    lines: [
-      { en: r.question, ko: r.questionKo },
-      { label: '예시 답변', en: r.sampleAnswer, ko: r.sampleAnswerKo, collapsible: true },
-    ],
+    focus: {
+      question: r.question,
+      questionKo: r.questionKo,
+      sampleAnswer: r.sampleAnswer,
+      sampleAnswerKo: r.sampleAnswerKo,
+    },
   });
 
   const freeToMessage = (r: Awaited<ReturnType<typeof freeTurn>>): Omit<ChatMessage, 'id'> => ({
@@ -171,9 +213,11 @@ export default function ChatTab({ category, settings, addHistory, openSettings }
     lines: [{ en: r.reply, ko: r.replyKo }],
   });
 
-  // 새 모델 메시지의 첫 영어 라인을 자동 재생
+  // 새 모델 메시지의 첫 영어(질문/응답)를 자동 재생
   const autoSpeakFirstLine = (msg: ChatMessage) => {
-    if (settings.autoSpeak && msg.lines?.[0]?.en) speak(msg.lines[0].en, `${msg.id}:0`);
+    if (!settings.autoSpeak) return;
+    if (msg.focus?.question) speak(msg.focus.question, `${msg.id}:q`);
+    else if (msg.lines?.[0]?.en) speak(msg.lines[0].en, `${msg.id}:0`);
   };
 
   // ── 대화 시작 ──────────────────────────
@@ -353,6 +397,16 @@ export default function ChatTab({ category, settings, addHistory, openSettings }
         {messages.map((m) => (
           <div key={m.id} className={`msg ${m.role} ${m.clean ? 'clean-flag' : ''}`}>
             {m.text && <div className="msg-text">{m.text}</div>}
+            {m.focus && (
+              <FocusView
+                focus={m.focus}
+                msgId={m.id}
+                speakingId={speakingId}
+                onSpeak={speak}
+                onStop={stopSpeaking}
+                disabled={missingKey}
+              />
+            )}
             {m.lines?.map((line, i) => (
               <LineView
                 key={i}

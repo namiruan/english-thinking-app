@@ -382,34 +382,30 @@ select {
   border-radius: 9px;
   line-height: 1.55;
 }
-/* 예시 답변 아코디언 (같은 자리에서 열고 닫힘) */
-.disclosure {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  border: none;
-  background: transparent;
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 600;
-  padding: 3px 0;
-  transition: 0.15s;
+/* 예시 답변 (번역 박스와 동일 디자인) */
+.tline-ex {
+  margin-top: 8px;
 }
-.disclosure:hover {
+.tline-ex-en {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
   color: var(--text);
+  font-weight: 550;
+  font-size: 14px;
+  line-height: 1.45;
 }
-.disclosure-caret {
-  display: inline-block;
+.tline-ex-ko {
+  margin-top: 7px;
+  margin-left: 31px;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.speak.mini {
+  width: 22px;
+  height: 22px;
   font-size: 10px;
-  color: var(--faint);
-  transition: transform 0.15s;
-}
-.disclosure.open .disclosure-caret {
-  transform: rotate(90deg);
-}
-.tline-body {
-  margin-top: 9px;
-  padding-left: 3px;
 }
 
 .speak {
