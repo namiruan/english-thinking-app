@@ -57,9 +57,16 @@ function LineView({
         </span>
       </div>
       <div className="tline-ko-wrap">
-        <button className="tline-toggle" onClick={() => setShowKo((s) => !s)}>
-          {showKo ? '번역 숨기기' : '번역 보기'}
-        </button>
+        <div className="tline-actions">
+          <button className="tline-toggle" onClick={() => setShowKo((s) => !s)}>
+            {showKo ? '번역 숨기기' : '번역 보기'}
+          </button>
+          {line.collapsible && (
+            <button className="tline-toggle" onClick={() => setRevealed(false)}>
+              {line.label ?? '예시'} 숨기기
+            </button>
+          )}
+        </div>
         {showKo && <div className="tline-ko">{line.ko}</div>}
       </div>
     </div>

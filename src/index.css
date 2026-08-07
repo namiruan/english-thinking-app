@@ -358,6 +358,10 @@ select {
   margin-left: 36px;
   margin-top: 6px;
 }
+.tline-actions {
+  display: flex;
+  gap: 14px;
+}
 .tline-toggle {
   border: none;
   background: transparent;
