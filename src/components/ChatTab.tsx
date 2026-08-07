@@ -256,6 +256,17 @@ export default function ChatTab({ category, settings, addHistory, openSettings }
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
 
+  // 진행 중인 세션이 있으면 페이지 이탈(새로고침/닫기) 시 경고
+  useEffect(() => {
+    if (messages.length === 0) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [messages.length]);
+
   const push = (m: Omit<ChatMessage, 'id'>) => {
     const msg = { ...m, id: newId() };
     setMessages((prev) => [...prev, msg]);

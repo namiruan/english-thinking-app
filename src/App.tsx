@@ -107,14 +107,15 @@ export default function App() {
         />
       )}
 
-      {tab === 'chat' && (
+      {/* 대화 탭은 언마운트하지 않고 숨김 → 탭 전환해도 세션 유지 */}
+      <div style={{ display: tab === 'chat' ? undefined : 'none' }}>
         <ChatTab
           category={activeCat}
           settings={effectiveSettings}
           addHistory={addHistory}
           openSettings={() => setShowSettings(true)}
         />
-      )}
+      </div>
 
       {tab === 'history' && <HistoryTab history={history} clearHistory={clearHistory} />}
 
