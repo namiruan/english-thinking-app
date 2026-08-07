@@ -33,20 +33,35 @@ function LineView({
   onSpeak: () => void;
   disabled: boolean;
 }) {
-  const [show, setShow] = useState(false);
+  const [revealed, setRevealed] = useState(!line.collapsible);
+  const [showKo, setShowKo] = useState(false);
+
+  // 예시 답변: 클릭해서 펼치기 전
+  if (!revealed) {
+    return (
+      <button className="hint-btn" onClick={() => setRevealed(true)}>
+        💡 {line.label ?? '예시'} 보기
+      </button>
+    );
+  }
+
   return (
     <div className="tline">
       <div className="tline-en">
         <button className="speak" onClick={onSpeak} disabled={disabled} title="원어민 음성으로 듣기">
           {speaking ? '⏸' : '🔊'}
         </button>
-        {line.label && <span className="tline-label">{line.label}</span>}
-        <span className="tline-text">{line.en}</span>
+        <span className="tline-text">
+          {line.label && <span className="tline-tag">{line.label}</span>}
+          {line.en}
+        </span>
       </div>
-      <button className="tline-toggle" onClick={() => setShow((s) => !s)}>
-        {show ? '번역 숨기기' : '번역 보기'}
-      </button>
-      {show && <div className="tline-ko">{line.ko}</div>}
+      <div className="tline-ko-wrap">
+        <button className="tline-toggle" onClick={() => setShowKo((s) => !s)}>
+          {showKo ? '번역 숨기기' : '번역 보기'}
+        </button>
+        {showKo && <div className="tline-ko">{line.ko}</div>}
+      </div>
     </div>
   );
 }
@@ -136,8 +151,8 @@ export default function ChatTab({ category, settings, addHistory, openSettings }
     text: r.feedback,
     clean: r.clean,
     lines: [
-      { label: '질문', en: r.question, ko: r.questionKo },
-      { label: '예시 답변', en: r.sampleAnswer, ko: r.sampleAnswerKo },
+      { en: r.question, ko: r.questionKo },
+      { label: '예시 답변', en: r.sampleAnswer, ko: r.sampleAnswerKo, collapsible: true },
     ],
   });
 

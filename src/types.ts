@@ -18,6 +18,7 @@ export interface TranslatedLine {
   label?: string; // 예: "질문", "예시 답변"
   en: string; // 영어 (TTS 대상)
   ko: string; // 자연스러운 한국어 번역 (숨김)
+  collapsible?: boolean; // true면 영어도 클릭해야 보임 (예시 답변)
 }
 
 export interface ChatMessage {
