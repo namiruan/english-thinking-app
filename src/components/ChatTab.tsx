@@ -242,6 +242,7 @@ export default function ChatTab({
 
   const recRef = useRef<Recognizer | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioPrimedRef = useRef(false);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const turnsRef = useRef<Turn[]>([]);
 
@@ -267,6 +268,13 @@ export default function ChatTab({
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
 
+  // 음성 설정이 바뀌면 재생 상태 초기화 (토글 꼬임 방지)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    stopSpeaking();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voiceEngine, settings.kokoroVoice, settings.browserVoice, settings.voice]);
+
   // 진행 중인 세션이 있으면 페이지 이탈(새로고침/닫기) 시 경고
   useEffect(() => {
     if (messages.length === 0) return;
@@ -285,30 +293,53 @@ export default function ChatTab({
   };
 
   // ── TTS ────────────────────────────────
-  const stopSpeaking = () => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current = null;
+  // 자동재생 정책 대응: 사용자 클릭 시점에 오디오 요소를 미리 '해제'해 둔다.
+  // 이후 비동기 합성(await) 뒤에 재생해도 차단되지 않음.
+  const SILENT_WAV =
+    'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
+  const ensureAudio = () => {
+    if (!audioRef.current) audioRef.current = new Audio();
+    return audioRef.current;
+  };
+  const primeAudio = () => {
+    if (audioPrimedRef.current) return;
+    audioPrimedRef.current = true;
+    try {
+      const a = ensureAudio();
+      a.src = SILENT_WAV;
+      a.play().then(() => a.pause()).catch(() => {});
+    } catch {
+      /* ignore */
     }
+  };
+
+  const stopSpeaking = () => {
+    audioRef.current?.pause();
     cancelBrowserSpeech();
     setSpeakingId(null);
   };
 
   const playUrl = (url: string, id: string) => {
-    stopSpeaking();
+    cancelBrowserSpeech();
+    const audio = ensureAudio();
+    audio.pause();
+    audio.src = url;
     setSpeakingId(id);
-    const audio = new Audio(url);
-    audioRef.current = audio;
     audio.onended = () => {
       URL.revokeObjectURL(url);
       setSpeakingId((cur) => (cur === id ? null : cur));
     };
-    audio.play().catch(() => setSpeakingId(null));
+    audio.onerror = () => setSpeakingId((cur) => (cur === id ? null : cur));
+    audio.play().catch(() => {
+      setSpeakingId(null);
+      push({ role: 'model', text: '🔊 자동 재생이 차단됐어요. 스피커 버튼(🔊)을 한 번 더 눌러주세요.' });
+    });
   };
 
   // 재생 (스피커 버튼 / 자동 재생 공용)
   const speak = async (text: string, id: string) => {
     if (!text) return;
+    primeAudio(); // 클릭 제스처 안에서 오디오 해제
     stopSpeaking();
     // 브라우저 음성: API 호출 없이 즉시 재생 (무료·무제한)
     if (voiceEngine === 'browser') {
@@ -395,6 +426,7 @@ export default function ChatTab({
   const start = async () => {
     if (!settings.apiKey) return openSettings();
     if (loading) return;
+    primeAudio(); // 클릭 제스처 안에서 오디오 해제 (자동재생 대비)
     setLoading(true);
     try {
       if (mode === 'focus') {
@@ -420,6 +452,7 @@ export default function ChatTab({
     if (!text || loading) return;
     if (!settings.apiKey) return openSettings();
 
+    primeAudio(); // 클릭 제스처 안에서 오디오 해제 (자동재생 대비)
     const userMsg = push({ role: 'user', text });
     turnsRef.current.push({ role: 'user', text });
     setInput('');
