@@ -10,7 +10,7 @@ import type {
 } from '../types';
 import { newId } from '../store';
 import { focusTurn, freeTurn, friendlyError, type Turn } from '../lib/gemini';
-import { synthCloud } from '../lib/cloudtts';
+import { synthCloudBuffer } from '../lib/cloudtts';
 import { catHue } from '../lib/ui';
 import PhraseCombobox from './PhraseCombobox';
 import { isSpeechRecognitionSupported, startRecognition, type Recognizer } from '../lib/speech';
@@ -257,6 +257,8 @@ export default function ChatTab({
   const recRef = useRef<Recognizer | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioPrimedRef = useRef(false);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const srcNodeRef = useRef<AudioBufferSourceNode | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const turnsRef = useRef<Turn[]>([]);
 
@@ -308,45 +310,64 @@ export default function ChatTab({
     return msg;
   };
 
-  // ── TTS ────────────────────────────────
-  // 자동재생 정책 대응: 사용자 클릭 시점에 오디오 요소를 미리 '해제'해 둔다.
-  // 이후 비동기 합성(await) 뒤에 재생해도 차단되지 않음.
+  // ── TTS (Web Audio 우선 · <audio> 폴백) ───────────────
+  // 브라우저 자동재생 정책: 비동기 합성(await) 뒤 재생은 제스처를 벗어나 차단될 수 있음.
+  // → AudioContext를 첫 제스처에서 resume 해두면 이후 버퍼 재생은 자유롭게 됨(iOS 포함).
   const SILENT_WAV =
     'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
   const ensureAudio = () => {
     if (!audioRef.current) audioRef.current = new Audio();
     return audioRef.current;
   };
-  const primeAudio = () => {
-    if (audioPrimedRef.current) return;
+  const getCtx = (): AudioContext | null => {
     try {
-      const a = ensureAudio();
-      a.src = SILENT_WAV;
-      a.play()
-        .then(() => {
-          a.pause();
-          a.currentTime = 0;
-          audioPrimedRef.current = true; // 실제로 재생에 성공했을 때만 '해제됨'으로 표시
-        })
-        .catch(() => {
-          /* 아직 해제 안 됨 → 다음 제스처에서 재시도 */
-        });
+      if (!audioCtxRef.current) {
+        const Ctx =
+          window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+        if (!Ctx) return null;
+        audioCtxRef.current = new Ctx();
+      }
+      return audioCtxRef.current;
     } catch {
-      /* ignore */
+      return null;
+    }
+  };
+
+  // 사용자 제스처에서 오디오 잠금해제 (AudioContext resume + <audio> 폴백 프라임)
+  const unlockAudio = () => {
+    const ctx = getCtx();
+    if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => {});
+    if (!audioPrimedRef.current) {
+      try {
+        const a = ensureAudio();
+        a.src = SILENT_WAV;
+        a.play()
+          .then(() => {
+            a.pause();
+            a.currentTime = 0;
+            audioPrimedRef.current = true;
+          })
+          .catch(() => {});
+      } catch {
+        /* ignore */
+      }
     }
   };
 
   const stopSpeaking = () => {
+    try {
+      srcNodeRef.current?.stop();
+    } catch {
+      /* ignore */
+    }
+    srcNodeRef.current = null;
     audioRef.current?.pause();
     setSpeakingId(null);
   };
 
-  // 자동재생 정책 대응: 페이지 어디든 첫 사용자 제스처에서 오디오를 미리 해제.
-  // (해제 성공 전까지 매 제스처마다 재시도 → 자동재생 차단 최소화)
+  // 페이지 어디든 첫 사용자 제스처에서 미리 잠금해제
   useEffect(() => {
-    const unlock = () => {
-      if (!audioPrimedRef.current) primeAudio();
-    };
+    const unlock = () => unlockAudio();
     const opts: AddEventListenerOptions = { passive: true };
     window.addEventListener('pointerdown', unlock, opts);
     window.addEventListener('keydown', unlock, opts);
@@ -359,6 +380,35 @@ export default function ChatTab({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Web Audio로 재생 (성공 true, 불가 시 false → 폴백)
+  const playBuffer = async (bytes: ArrayBuffer, id: string): Promise<boolean> => {
+    const ctx = getCtx();
+    if (!ctx) return false;
+    try {
+      if (ctx.state === 'suspended') await ctx.resume();
+      const audioBuf = await ctx.decodeAudioData(bytes.slice(0));
+      try {
+        srcNodeRef.current?.stop();
+      } catch {
+        /* ignore */
+      }
+      const src = ctx.createBufferSource();
+      src.buffer = audioBuf;
+      src.connect(ctx.destination);
+      src.onended = () => {
+        if (srcNodeRef.current === src) srcNodeRef.current = null;
+        setSpeakingId((cur) => (cur === id ? null : cur));
+      };
+      srcNodeRef.current = src;
+      setSpeakingId(id);
+      src.start();
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  // <audio> 요소 폴백 재생
   const playUrl = (url: string, id: string) => {
     const audio = ensureAudio();
     audio.pause();
@@ -371,26 +421,31 @@ export default function ChatTab({
     audio.onerror = () => setSpeakingId((cur) => (cur === id ? null : cur));
     audio.play().catch(() => {
       setSpeakingId(null);
-      audioPrimedRef.current = false; // 해제 실패 → 다음 제스처(또는 🔊 재클릭)에서 다시 해제 시도
+      audioPrimedRef.current = false;
       push({ role: 'model', text: '🔊 자동 재생이 차단됐어요. 스피커 버튼(🔊)을 한 번 더 눌러주세요.' });
     });
+  };
+
+  const playBytes = async (bytes: ArrayBuffer, id: string) => {
+    const ok = await playBuffer(bytes, id);
+    if (!ok) playUrl(URL.createObjectURL(new Blob([bytes])), id); // Web Audio 불가 시 폴백
   };
 
   // 재생 (스피커 버튼 / 자동 재생 공용)
   const speak = async (text: string, id: string) => {
     if (!text) return;
-    primeAudio(); // 클릭 제스처 안에서 오디오 해제
+    unlockAudio(); // 클릭 제스처 안에서 잠금해제
     stopSpeaking();
     setSpeakingId(id);
     try {
-      const url = await synthCloud(
+      const bytes = await synthCloudBuffer(
         settings.ttsUrl || '',
         settings.ttsSecret || '',
         text,
         settings.cloudVoice,
         settings.ttsModel,
       );
-      playUrl(url, id);
+      await playBytes(bytes, id);
     } catch (e) {
       setSpeakingId(null);
       push({ role: 'model', text: `🔊 음성 재생 실패: ${friendlyError(e)}` });
@@ -404,9 +459,9 @@ export default function ChatTab({
     suffix: string,
   ) => {
     if (!settings.autoSpeak || !ttsText || !settings.ttsUrl) return push(data);
-    let url: string | null = null;
+    let bytes: ArrayBuffer | null = null;
     try {
-      url = await synthCloud(
+      bytes = await synthCloudBuffer(
         settings.ttsUrl,
         settings.ttsSecret || '',
         ttsText,
@@ -417,7 +472,7 @@ export default function ChatTab({
       /* 합성 실패 시 텍스트만 노출 */
     }
     const msg = push(data);
-    if (url) playUrl(url, `${msg.id}:${suffix}`);
+    if (bytes) await playBytes(bytes, `${msg.id}:${suffix}`);
     return msg;
   };
 
@@ -444,7 +499,7 @@ export default function ChatTab({
   const start = async () => {
     if (!settings.apiKey) return openSettings();
     if (loading) return;
-    primeAudio(); // 클릭 제스처 안에서 오디오 해제 (자동재생 대비)
+    unlockAudio(); // 클릭 제스처 안에서 오디오 잠금해제 (자동재생 대비)
     setLoading(true);
     try {
       if (mode === 'focus') {
@@ -470,7 +525,7 @@ export default function ChatTab({
     if (!text || loading) return;
     if (!settings.apiKey) return openSettings();
 
-    primeAudio(); // 클릭 제스처 안에서 오디오 해제 (자동재생 대비)
+    unlockAudio(); // 클릭 제스처 안에서 오디오 잠금해제 (자동재생 대비)
     const userMsg = push({ role: 'user', text });
     turnsRef.current.push({ role: 'user', text });
     setInput('');

@@ -50,13 +50,13 @@ export const CLOUD_MODELS = [
   { id: 'aura-2-en', label: 'Aura-2 · 더 표현력 좋음 (최신)' },
 ];
 
-export async function synthCloud(
+async function fetchTts(
   url: string,
   secret: string,
   text: string,
-  speaker = 'asteria',
-  model = 'aura-1',
-): Promise<string> {
+  speaker: string,
+  model: string,
+): Promise<Response> {
   if (!url) throw new Error('NO_TTS_URL');
   const res = await fetch(url, {
     method: 'POST',
@@ -70,6 +70,29 @@ export async function synthCloud(
     const detail = await res.text().catch(() => '');
     throw new Error(`TTS ${res.status}: ${detail}`.slice(0, 200));
   }
-  const blob = await res.blob();
-  return URL.createObjectURL(blob);
+  return res;
+}
+
+/** 재생용 blob URL (레거시/폴백) */
+export async function synthCloud(
+  url: string,
+  secret: string,
+  text: string,
+  speaker = 'asteria',
+  model = 'aura-1',
+): Promise<string> {
+  const res = await fetchTts(url, secret, text, speaker, model);
+  return URL.createObjectURL(await res.blob());
+}
+
+/** Web Audio 재생용 원시 오디오 바이트 (자동재생 정책에 강함) */
+export async function synthCloudBuffer(
+  url: string,
+  secret: string,
+  text: string,
+  speaker = 'asteria',
+  model = 'aura-1',
+): Promise<ArrayBuffer> {
+  const res = await fetchTts(url, secret, text, speaker, model);
+  return await res.arrayBuffer();
 }
