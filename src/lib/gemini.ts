@@ -286,11 +286,11 @@ export async function lookupTerm(
       model,
       contents: [{ role: 'user', parts: [{ text: `Define: "${term}"` }] }],
       config: {
-        systemInstruction: `You are a concise bilingual (English-Korean) dictionary. For the given English word or phrase/idiom, return JSON:
+        systemInstruction: `You are a friendly bilingual (English-Korean) dictionary for beginners. For the given English word or phrase/idiom, return JSON:
 - "partOfSpeech": short type label (e.g. "verb", "noun", "idiom", "phrasal verb") or "".
-- "english": a concise English definition (1 sentence) of the whole word/phrase.
+- "english": a VERY SIMPLE English definition that a 5-year-old kindergartner could understand. Use only the most basic, common words. One short sentence. NO hard or academic vocabulary. If a simpler everyday word exists, use it.
 - "korean": a natural, short Korean meaning.
-If it's an idiom or multi-word phrase, define the whole expression, not individual words. Keep it short.`,
+If it's an idiom or multi-word phrase, explain the whole expression in simple words, not individual words. Keep it short and easy.`,
         responseMimeType: 'application/json',
         responseSchema: lookupSchema,
         temperature: 0.3,
