@@ -10,6 +10,7 @@ import {
 import { encryptSecret } from '../lib/crypto';
 import { buildVaultJson } from '../lib/vault';
 import { encryptData, pushVault, type SyncData } from '../lib/sync';
+import { speakBrowser, browserTtsSupported } from '../lib/browsertts';
 import { defaultGitHub } from '../store';
 
 interface Props {
@@ -263,7 +264,12 @@ export default function SettingsModal({
                       setCloudMsg('음성은 정상적으로 받았지만 브라우저가 재생을 막았어요. 버튼을 한 번 더 눌러보세요.');
                     }
                   } catch (e) {
-                    setCloudMsg('실패: ' + (e instanceof Error ? e.message : String(e)));
+                    // 클라우드 실패(주로 한도 429) → 브라우저 내장 음성으로 대체 재생
+                    if (browserTtsSupported() && speakBrowser("I'm starting to like this app.")) {
+                      setCloudMsg('무료 음성 한도 초과 → 브라우저 내장 음성으로 재생했어요 (대화창도 동일하게 대체돼요)');
+                    } else {
+                      setCloudMsg('실패: ' + (e instanceof Error ? e.message : String(e)));
+                    }
                   }
                 }}
               >
