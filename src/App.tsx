@@ -178,7 +178,11 @@ export default function App() {
       )}
 
       {/* 드래그 사전 조회 팝업 */}
-      <SelectionLookup apiKey={effectiveKey} onAdd={addWord} />
+      <SelectionLookup
+        apiKey={effectiveKey}
+        model={effectiveSettings.model || 'gemini-2.5-flash-lite'}
+        onAdd={addWord}
+      />
 
       <footer className="footer">
         영어식 사고 · Gemini 2.5 Flash + Native Audio TTS · git 저장

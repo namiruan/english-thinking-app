@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Category, GitHubConfig, Settings } from '../types';
-import { TTS_VOICES } from '../lib/gemini';
+import { TTS_VOICES, CHAT_MODELS } from '../lib/gemini';
 import { encryptSecret, type EncryptedBlob } from '../lib/crypto';
 import { buildVaultJson } from '../lib/vault';
 import { commitFile } from '../lib/github';
@@ -133,19 +133,53 @@ export default function SettingsModal({
         </div>
 
         <div className="field">
-          <label>원어민 음성 (Native TTS)</label>
+          <label>대화·사전 모델</label>
           <select
             className="select"
-            value={draft.voice}
-            onChange={(e) => setDraft({ ...draft, voice: e.target.value })}
+            value={draft.model ?? 'gemini-2.5-flash-lite'}
+            onChange={(e) => setDraft({ ...draft, model: e.target.value })}
           >
-            {TTS_VOICES.map((v) => (
-              <option key={v} value={v}>
-                {v}
+            {CHAT_MODELS.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.label}
               </option>
             ))}
           </select>
+          <p className="hint" style={{ margin: '6px 0 0' }}>
+            한도(429)가 자주 뜨면 <b>Flash-Lite</b>를 쓰세요. 한도 버킷이 따로라 여유가 큽니다.
+          </p>
         </div>
+
+        <div className="field">
+          <label>음성 엔진</label>
+          <select
+            className="select"
+            value={draft.voiceEngine ?? 'gemini'}
+            onChange={(e) =>
+              setDraft({ ...draft, voiceEngine: e.target.value as 'gemini' | 'browser' })
+            }
+          >
+            <option value="gemini">Gemini 원어민 음성 (고품질 · 한도 사용)</option>
+            <option value="browser">브라우저 음성 (무료 · 무제한)</option>
+          </select>
+        </div>
+
+        {(draft.voiceEngine ?? 'gemini') === 'gemini' && (
+          <div className="field">
+            <label>원어민 음성 (Gemini)</label>
+            <select
+              className="select"
+              value={draft.voice}
+              onChange={(e) => setDraft({ ...draft, voice: e.target.value })}
+            >
+              {TTS_VOICES.map((v) => (
+                <option key={v} value={v}>
+                  {v}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <label className="toggle" style={{ marginBottom: 16 }}>
           <input

@@ -11,7 +11,13 @@ import type {
 } from '../types';
 import { newId } from '../store';
 import { focusTurn, freeTurn, friendlyError, synthesizeSpeech, type Turn } from '../lib/gemini';
-import { isSpeechRecognitionSupported, startRecognition, type Recognizer } from '../lib/speech';
+import {
+  cancelBrowserSpeech,
+  isSpeechRecognitionSupported,
+  speakBrowser,
+  startRecognition,
+  type Recognizer,
+} from '../lib/speech';
 
 interface Props {
   category: Category | undefined;
@@ -240,6 +246,8 @@ export default function ChatTab({
 
   const phrases = category?.phrases ?? [];
   const phrase: Phrase | undefined = phrases[phraseIdx];
+  const model = settings.model || 'gemini-2.5-flash-lite';
+  const voiceEngine = settings.voiceEngine ?? 'gemini';
 
   const resetSession = () => {
     // 진행상황은 매 턴 자동 저장되므로 여기선 현재 대화만 초기화
@@ -281,6 +289,7 @@ export default function ChatTab({
       audioRef.current.pause();
       audioRef.current = null;
     }
+    cancelBrowserSpeech();
     setSpeakingId(null);
   };
 
@@ -296,10 +305,17 @@ export default function ChatTab({
     audio.play().catch(() => setSpeakingId(null));
   };
 
-  // 수동 재생 (스피커 버튼)
+  // 재생 (스피커 버튼 / 자동 재생 공용)
   const speak = async (text: string, id: string) => {
-    if (!settings.apiKey || !text) return;
+    if (!text) return;
     stopSpeaking();
+    // 브라우저 음성: API 호출 없이 즉시 재생 (무료·무제한)
+    if (voiceEngine === 'browser') {
+      setSpeakingId(id);
+      speakBrowser(text, () => setSpeakingId((cur) => (cur === id ? null : cur)));
+      return;
+    }
+    if (!settings.apiKey) return;
     setSpeakingId(id);
     try {
       const url = await synthesizeSpeech(settings.apiKey, text, settings.voice);
@@ -316,18 +332,26 @@ export default function ChatTab({
     ttsText: string,
     suffix: string,
   ) => {
-    if (settings.autoSpeak && settings.apiKey && ttsText) {
-      let url: string | null = null;
-      try {
-        url = await synthesizeSpeech(settings.apiKey, ttsText, settings.voice);
-      } catch {
-        /* 합성 실패 시 텍스트만 노출 */
-      }
+    if (!settings.autoSpeak || !ttsText) return push(data);
+
+    // 브라우저 음성: 로컬이라 지연 없음 → 바로 노출하고 재생
+    if (voiceEngine === 'browser') {
       const msg = push(data);
-      if (url) playUrl(url, `${msg.id}:${suffix}`);
+      speak(ttsText, `${msg.id}:${suffix}`);
       return msg;
     }
-    return push(data);
+
+    // Gemini 음성: 먼저 합성해 텍스트와 동시에 노출·재생
+    if (!settings.apiKey) return push(data);
+    let url: string | null = null;
+    try {
+      url = await synthesizeSpeech(settings.apiKey, ttsText, settings.voice);
+    } catch {
+      /* 합성 실패 시 텍스트만 노출 */
+    }
+    const msg = push(data);
+    if (url) playUrl(url, `${msg.id}:${suffix}`);
+    return msg;
   };
 
   // 집중 모드 결과 → 메시지
@@ -357,11 +381,11 @@ export default function ChatTab({
     try {
       if (mode === 'focus') {
         if (!phrase) return;
-        const r = await focusTurn(settings.apiKey, phrase, turnsRef.current, studyWords);
+        const r = await focusTurn(settings.apiKey, phrase, turnsRef.current, studyWords, model);
         turnsRef.current.push({ role: 'model', text: JSON.stringify(r) });
         await pushWithSpeech(focusToMessage(r), r.question, 'q');
       } else {
-        const r = await freeTurn(settings.apiKey, phrases, turnsRef.current, studyWords);
+        const r = await freeTurn(settings.apiKey, phrases, turnsRef.current, studyWords, model);
         turnsRef.current.push({ role: 'model', text: JSON.stringify(r) });
         await pushWithSpeech(freeToMessage(r), r.reply, '0');
       }
@@ -387,7 +411,7 @@ export default function ChatTab({
       if (mode === 'focus') {
         if (!phrase) return;
         setFocusCount((c) => c + 1);
-        const r = await focusTurn(settings.apiKey, phrase, turnsRef.current, studyWords);
+        const r = await focusTurn(settings.apiKey, phrase, turnsRef.current, studyWords, model);
         turnsRef.current.push({ role: 'model', text: JSON.stringify(r) });
         if (r.clean) setCleanCount((c) => Math.min(CLEAN_GOAL, c + 1));
         recordFocusTurn(phrase.text, r.clean); // 구문별 숙련도 + 일일 활동 자동 저장
@@ -415,7 +439,7 @@ export default function ChatTab({
       } else {
         setFreeCount((c) => c + 1);
         recordFreeTurn(); // 일일 활동 자동 저장
-        const r = await freeTurn(settings.apiKey, phrases, turnsRef.current, studyWords);
+        const r = await freeTurn(settings.apiKey, phrases, turnsRef.current, studyWords, model);
         turnsRef.current.push({ role: 'model', text: JSON.stringify(r) });
         await pushWithSpeech(freeToMessage(r), r.reply, '0');
       }

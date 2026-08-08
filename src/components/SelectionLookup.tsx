@@ -4,6 +4,7 @@ import type { WordEntry } from '../types';
 
 interface Props {
   apiKey: string;
+  model: string;
   onAdd: (w: Pick<WordEntry, 'term' | 'english' | 'korean'>) => void;
 }
 
@@ -13,7 +14,7 @@ interface Anchor {
   y: number;
 }
 
-export default function SelectionLookup({ apiKey, onAdd }: Props) {
+export default function SelectionLookup({ apiKey, model, onAdd }: Props) {
   const [anchor, setAnchor] = useState<Anchor | null>(null);
   const [result, setResult] = useState<LookupResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -53,13 +54,13 @@ export default function SelectionLookup({ apiKey, onAdd }: Props) {
     let alive = true;
     setLoading(true);
     setError('');
-    lookupTerm(apiKey, anchor.term)
+    lookupTerm(apiKey, anchor.term, model)
       .then((r) => alive && (setResult(r), setLoading(false)))
       .catch((e) => alive && (setError(friendlyError(e)), setLoading(false)));
     return () => {
       alive = false;
     };
-  }, [anchor, apiKey]);
+  }, [anchor, apiKey, model]);
 
   if (!anchor) return null;
 

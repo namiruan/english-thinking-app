@@ -57,3 +57,27 @@ export function startRecognition(
   rec.start();
   return { stop: () => rec.stop() };
 }
+
+// ── 브라우저 내장 음성 합성 (무료·무제한) ──────────────
+export const isSpeechSynthesisSupported = () => 'speechSynthesis' in window;
+
+/** 브라우저 TTS로 재생. onEnd는 끝나거나 실패 시 호출. */
+export function speakBrowser(text: string, onEnd: () => void, lang = 'en-US') {
+  const synth = window.speechSynthesis;
+  if (!synth) {
+    onEnd();
+    return;
+  }
+  synth.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = lang;
+  const voice = synth.getVoices().find((v) => v.lang.startsWith('en'));
+  if (voice) u.voice = voice;
+  u.onend = onEnd;
+  u.onerror = onEnd;
+  synth.speak(u);
+}
+
+export function cancelBrowserSpeech() {
+  window.speechSynthesis?.cancel();
+}

@@ -2,8 +2,14 @@ import { GoogleGenAI, Type } from '@google/genai';
 import type { Phrase } from '../types';
 import { base64ToBytes, parseSampleRate, pcmToWavBlob } from './audio';
 
-const CHAT_MODEL = 'gemini-2.5-flash';
+const CHAT_MODEL = 'gemini-2.5-flash-lite';
 const TTS_MODEL = 'gemini-2.5-flash-preview-tts';
+
+// 설정에서 고를 수 있는 대화/사전 모델
+export const CHAT_MODELS = [
+  { id: 'gemini-2.5-flash-lite', label: 'Flash-Lite · 한도 여유·빠름 (권장)' },
+  { id: 'gemini-2.5-flash', label: 'Flash · 고품질' },
+];
 
 function client(apiKey: string) {
   if (!apiKey) throw new Error('NO_API_KEY');
@@ -148,6 +154,7 @@ export async function focusTurn(
   phrase: Phrase,
   turns: Turn[],
   studyWords: string[] = [],
+  model: string = CHAT_MODEL,
 ): Promise<FocusResult> {
   const ai = client(apiKey);
   const contents =
@@ -157,7 +164,7 @@ export async function focusTurn(
 
   const res = await withRetry(() =>
     ai.models.generateContent({
-      model: CHAT_MODEL,
+      model,
       contents,
       config: {
         systemInstruction: focusSystem(phrase, studyWords),
@@ -221,6 +228,7 @@ export async function freeTurn(
   phrases: Phrase[],
   turns: Turn[],
   studyWords: string[] = [],
+  model: string = CHAT_MODEL,
 ): Promise<FreeResult> {
   const ai = client(apiKey);
   const contents =
@@ -230,7 +238,7 @@ export async function freeTurn(
 
   const res = await withRetry(() =>
     ai.models.generateContent({
-      model: CHAT_MODEL,
+      model,
       contents,
       config: {
         systemInstruction: freeSystem(phrases, studyWords),
@@ -266,11 +274,15 @@ const lookupSchema = {
   required: ['partOfSpeech', 'english', 'korean'],
 };
 
-export async function lookupTerm(apiKey: string, term: string): Promise<LookupResult> {
+export async function lookupTerm(
+  apiKey: string,
+  term: string,
+  model: string = CHAT_MODEL,
+): Promise<LookupResult> {
   const ai = client(apiKey);
   const res = await withRetry(() =>
     ai.models.generateContent({
-      model: CHAT_MODEL,
+      model,
       contents: [{ role: 'user', parts: [{ text: `Define: "${term}"` }] }],
       config: {
         systemInstruction: `You are a concise bilingual (English-Korean) dictionary. For the given English word or phrase/idiom, return JSON:
