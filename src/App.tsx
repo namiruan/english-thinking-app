@@ -22,9 +22,9 @@ type Tab = 'register' | 'chat' | 'history' | 'wordbook';
 export default function App() {
   const [categories, setCategories] = useLocalStorage<Category[]>('et.categories', seedCategories);
   const [settings, setSettings] = useLocalStorage<Settings>('et.settings', defaultSettings);
-  const [activeCatId, setActiveCatId] = useLocalStorage<string>(
-    'et.activeCat',
-    seedCategories[0]?.id ?? '',
+  const [selectedCatIds, setSelectedCatIds] = useLocalStorage<string[]>(
+    'et.selectedCats',
+    seedCategories[0]?.id ? [seedCategories[0].id] : [],
   );
   const { progress, recordFocusTurn, recordFreeTurn, clearProgress } = useProgress();
   const { grammarStats, addGrammar, clearGrammar } = useGrammarStats();
@@ -60,7 +60,7 @@ export default function App() {
       if (!v?.phrasesEnc && !localStorage.getItem('et.initialized')) {
         const phrases = v?.phrases?.length ? v.phrases : seedCategories;
         setCategories(phrases);
-        setActiveCatId(phrases[0]?.id ?? '');
+        setSelectedCatIds(phrases[0]?.id ? [phrases[0].id] : []);
         localStorage.setItem('et.initialized', '1');
       }
       setBooted(true);
@@ -80,13 +80,27 @@ export default function App() {
   // 비번 강제: vault에 암호화 자료가 있으면 잠금 해제 전까지 앱을 막음
   const locked = booted && !!(vault?.secret || vault?.phrasesEnc) && !unlocked;
 
-  const activeCat = categories.find((c) => c.id === activeCatId) ?? categories[0];
+  // 연습 대상 = 선택된 카테고리들의 구문 합집합
+  const selectedCats = categories.filter((c) => selectedCatIds.includes(c.id));
+  const practicePhrases = selectedCats.flatMap((c) => c.phrases);
+  const poolLabel =
+    selectedCats.length === 0
+      ? ''
+      : selectedCats.length === 1
+        ? selectedCats[0].name
+        : `${selectedCats.length}개 카테고리`;
+  const poolKey = selectedCatIds.join(',');
+
+  const toggleSelected = (id: string) =>
+    setSelectedCatIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  const addSelected = (id: string) =>
+    setSelectedCatIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
 
   const handleUnlock = (key: string | null, cats: Category[] | null) => {
     if (key) setSessionKey(key);
     if (cats && cats.length) {
       setCategories(cats);
-      setActiveCatId(cats[0]?.id ?? '');
+      setSelectedCatIds(cats[0]?.id ? [cats[0].id] : []);
     }
     setUnlocked(true);
   };
@@ -139,8 +153,9 @@ export default function App() {
             <RegisterTab
               categories={categories}
               setCategories={setCategories}
-              activeCatId={activeCat?.id ?? ''}
-              setActiveCatId={setActiveCatId}
+              selectedCatIds={selectedCatIds}
+              toggleSelected={toggleSelected}
+              addSelected={addSelected}
               apiKey={effectiveKey}
               model={effectiveSettings.model?.trim() || 'gemini-3.5-flash-lite'}
             />
@@ -149,7 +164,9 @@ export default function App() {
           {/* 대화 탭은 언마운트하지 않고 숨김 → 탭 전환해도 세션 유지 */}
           <div style={{ display: tab === 'chat' ? undefined : 'none' }}>
             <ChatTab
-              category={activeCat}
+              phrases={practicePhrases}
+              poolLabel={poolLabel}
+              poolKey={poolKey}
               settings={effectiveSettings}
               recordFocusTurn={recordFocusTurn}
               recordFreeTurn={recordFreeTurn}

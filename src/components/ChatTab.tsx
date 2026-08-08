@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import type {
-  Category,
   ChatMessage,
   Correction,
   FocusBlock,
@@ -15,7 +14,9 @@ import { synthCloud } from '../lib/cloudtts';
 import { isSpeechRecognitionSupported, startRecognition, type Recognizer } from '../lib/speech';
 
 interface Props {
-  category: Category | undefined;
+  phrases: Phrase[];
+  poolLabel: string;
+  poolKey: string;
   settings: Settings;
   recordFocusTurn: (phraseText: string, clean: boolean) => void;
   recordFreeTurn: () => void;
@@ -215,7 +216,9 @@ function FocusView({
 }
 
 export default function ChatTab({
-  category,
+  phrases,
+  poolLabel,
+  poolKey,
   settings,
   recordFocusTurn,
   recordFreeTurn,
@@ -240,7 +243,6 @@ export default function ChatTab({
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const turnsRef = useRef<Turn[]>([]);
 
-  const phrases = category?.phrases ?? [];
   const phrase: Phrase | undefined = phrases[phraseIdx];
   const model = settings.model?.trim() || 'gemini-3.5-flash-lite';
 
@@ -255,7 +257,11 @@ export default function ChatTab({
   };
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => resetSession(), [category?.id, mode, phraseIdx]);
+  useEffect(() => {
+    if (phraseIdx >= phrases.length && phrases.length > 0) setPhraseIdx(0);
+  }, [phrases.length, phraseIdx]);
+
+  useEffect(() => resetSession(), [poolKey, mode, phraseIdx]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -494,10 +500,10 @@ export default function ChatTab({
   const started = messages.length > 0;
   const missingKey = !settings.apiKey;
 
-  if (!category || phrases.length === 0) {
+  if (phrases.length === 0) {
     return (
       <div className="empty">
-        먼저 <b>표현 등록</b> 탭에서 구문을 등록해주세요.
+        먼저 <b>표현 등록</b> 탭에서 연습할 카테고리를 선택해주세요.
       </div>
     );
   }
@@ -520,7 +526,7 @@ export default function ChatTab({
       <div className="card target">
         <div>
           <div className="section-label" style={{ margin: '0 0 6px' }}>
-            {mode === 'focus' ? '집중 목표 구문' : '이 카테고리'}
+            {mode === 'focus' ? '집중 목표 구문' : '연습 카테고리'}
           </div>
           {mode === 'focus' ? (
             <>
@@ -533,7 +539,7 @@ export default function ChatTab({
           ) : (
             <>
               <div className="phrase" style={{ fontSize: 15 }}>
-                {category.name}
+                {poolLabel}
               </div>
               <div className="meaning">{phrases.length}개 구문으로 대화</div>
             </>

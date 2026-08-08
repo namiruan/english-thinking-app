@@ -717,9 +717,29 @@ textarea.input:focus {
   border-color: var(--accent);
   background: var(--surface);
 }
+.cat-title-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.cat-title-row .cat-name-input {
+  width: auto;
+  flex: 1;
+  min-width: 0;
+}
 .cat-count {
   font-size: 12px;
   color: var(--faint);
+  margin-left: 24px;
+}
+.btn.accent {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.btn.accent:hover {
+  border-color: var(--accent);
+  filter: brightness(1.05);
 }
 
 /* ── 문법 약점 ──────────────────────────── */

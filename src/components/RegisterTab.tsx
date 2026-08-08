@@ -6,8 +6,9 @@ import { lookupTerm } from '../lib/gemini';
 interface Props {
   categories: Category[];
   setCategories: React.Dispatch<React.SetStateAction<Category[]>>;
-  activeCatId: string;
-  setActiveCatId: (id: string) => void;
+  selectedCatIds: string[];
+  toggleSelected: (id: string) => void;
+  addSelected: (id: string) => void;
   apiKey?: string;
   model?: string;
 }
@@ -15,8 +16,9 @@ interface Props {
 export default function RegisterTab({
   categories,
   setCategories,
-  activeCatId,
-  setActiveCatId,
+  selectedCatIds,
+  toggleSelected,
+  addSelected,
   apiKey,
   model,
 }: Props) {
@@ -38,7 +40,7 @@ export default function RegisterTab({
     if (!name) return;
     const cat: Category = { id: newId(), name, phrases: [] };
     setCategories((prev) => [...prev, cat]);
-    setActiveCatId(cat.id);
+    addSelected(cat.id);
     setNewCat('');
   };
 
@@ -116,7 +118,7 @@ export default function RegisterTab({
       targetName = cat.name;
       setCategories((prev) => [...prev, cat]);
     }
-    setActiveCatId(targetId);
+    addSelected(targetId);
     setImportText('');
     setImportName('');
 
@@ -209,11 +211,8 @@ export default function RegisterTab({
 
   const removeCategory = (catId: string) => {
     if (!confirm('이 카테고리와 안의 구문을 모두 삭제할까요?')) return;
-    setCategories((prev) => {
-      const next = prev.filter((c) => c.id !== catId);
-      if (activeCatId === catId && next[0]) setActiveCatId(next[0].id);
-      return next;
-    });
+    setCategories((prev) => prev.filter((c) => c.id !== catId));
+    if (selectedCatIds.includes(catId)) toggleSelected(catId);
   };
 
   const d = (catId: string): Draft => draft[catId] ?? emptyDraft;
@@ -296,44 +295,46 @@ export default function RegisterTab({
       {categories.map((cat) => (
         <div className="card" key={cat.id} style={{ marginBottom: 16 }}>
           <div className="cat-head">
-            <button
-              className={`cat-collapse ${collapsed[cat.id] ? 'collapsed' : ''}`}
-              onClick={() => toggleCollapse(cat.id)}
-              aria-label={collapsed[cat.id] ? '펼치기' : '접기'}
-              aria-expanded={!collapsed[cat.id]}
-              title={collapsed[cat.id] ? '펼치기' : '접기'}
-            >
-              <svg
-                width="15"
-                height="15"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M6 9l6 6 6-6" />
-              </svg>
-            </button>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <input
-                className="cat-name-input"
-                value={cat.name}
-                onChange={(e) => renameCategory(cat.id, e.target.value)}
-                placeholder="카테고리 이름"
-                aria-label="카테고리 이름 수정"
-              />
+              <div className="cat-title-row">
+                <button
+                  className={`cat-collapse ${collapsed[cat.id] ? 'collapsed' : ''}`}
+                  onClick={() => toggleCollapse(cat.id)}
+                  aria-label={collapsed[cat.id] ? '펼치기' : '접기'}
+                  aria-expanded={!collapsed[cat.id]}
+                  title={collapsed[cat.id] ? '펼치기' : '접기'}
+                >
+                  <svg
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M6 9l6 6 6-6" />
+                  </svg>
+                </button>
+                <input
+                  className="cat-name-input"
+                  value={cat.name}
+                  onChange={(e) => renameCategory(cat.id, e.target.value)}
+                  placeholder="카테고리 이름"
+                  aria-label="카테고리 이름 수정"
+                />
+              </div>
               <div className="cat-count">{cat.phrases.length}개 구문</div>
             </div>
             <div className="row">
-              {activeCatId === cat.id ? (
-                <span className="chip accent">연습 중</span>
-              ) : (
-                <button className="btn sm" onClick={() => setActiveCatId(cat.id)}>
-                  이걸로 연습
-                </button>
-              )}
+              <button
+                className={`btn sm ${selectedCatIds.includes(cat.id) ? 'accent' : ''}`}
+                onClick={() => toggleSelected(cat.id)}
+                title="대화에서 함께 연습할 카테고리를 여러 개 고를 수 있어요"
+              >
+                {selectedCatIds.includes(cat.id) ? '✓ 연습 중' : '연습에 추가'}
+              </button>
               <button className="btn sm danger ghost" onClick={() => removeCategory(cat.id)}>
                 삭제
               </button>
