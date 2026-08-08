@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { Category, GitHubConfig, Settings } from '../types';
 import { TTS_VOICES, CHAT_MODELS } from '../lib/gemini';
 import { listEnglishVoices, onVoicesChanged, speakBrowser } from '../lib/speech';
-import { KOKORO_VOICES, loadKokoro } from '../lib/kokoro';
+import { KOKORO_VOICES, loadKokoro, kokoroDevice } from '../lib/kokoro';
 import { encryptSecret, type EncryptedBlob } from '../lib/crypto';
 import { buildVaultJson } from '../lib/vault';
 import { commitFile } from '../lib/github';
@@ -55,7 +55,9 @@ export default function SettingsModal({
     try {
       await loadKokoro((p) => setKokoroPct(p));
       setKokoroPct(100);
-      setKokoroMsg('✓ 음성 모델 준비 완료!');
+      setKokoroMsg(
+        `✓ 준비 완료 · ${kokoroDevice() === 'webgpu' ? 'WebGPU 가속 (빠름)' : 'WASM/CPU (느릴 수 있음)'}`,
+      );
     } catch (e) {
       setKokoroPct(null);
       setKokoroMsg('로드 실패: ' + (e instanceof Error ? e.message : String(e)));

@@ -30,20 +30,43 @@ export function kokoroStatus(): Status {
   return status;
 }
 
-/** 모델 로드(최초 1회 다운로드). progress: 0~100 */
+let usedDevice: 'webgpu' | 'wasm' | null = null;
+export function kokoroDevice() {
+  return usedDevice;
+}
+
+/** 모델 로드(최초 1회 다운로드). WebGPU 가능하면 가속, 아니면 WASM. progress: 0~100 */
 export function loadKokoro(onProgress?: (pct: number) => void): Promise<any> {
   if (!ttsPromise) {
     status = 'loading';
-    ttsPromise = import('kokoro-js')
-      .then(({ KokoroTTS }) =>
-        KokoroTTS.from_pretrained(MODEL_ID, {
-          dtype: 'q8',
-          device: 'wasm',
-          progress_callback: (p: any) => {
-            if (onProgress && p && typeof p.progress === 'number') onProgress(Math.round(p.progress));
-          },
-        }),
-      )
+    ttsPromise = (async () => {
+      const { KokoroTTS } = await import('kokoro-js');
+      const progress_callback = (p: any) => {
+        if (onProgress && p && typeof p.progress === 'number') onProgress(Math.round(p.progress));
+      };
+      const hasGpu = typeof navigator !== 'undefined' && 'gpu' in navigator;
+      // WebGPU 가속 시도 → 실패하면 WASM으로 폴백 (같은 q8 파일 재사용)
+      if (hasGpu) {
+        try {
+          const t = await KokoroTTS.from_pretrained(MODEL_ID, {
+            dtype: 'q8',
+            device: 'webgpu',
+            progress_callback,
+          });
+          usedDevice = 'webgpu';
+          return t;
+        } catch {
+          /* WebGPU 실패 → WASM */
+        }
+      }
+      const t = await KokoroTTS.from_pretrained(MODEL_ID, {
+        dtype: 'q8',
+        device: 'wasm',
+        progress_callback,
+      });
+      usedDevice = 'wasm';
+      return t;
+    })()
       .then((tts) => {
         status = 'ready';
         return tts;
