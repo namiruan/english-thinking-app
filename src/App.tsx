@@ -101,7 +101,10 @@ export default function App() {
 
   // 연습 대상 = 선택된 카테고리들의 구문 합집합
   const selectedCats = categories.filter((c) => selectedCatIds.includes(c.id));
-  const practicePhrases = selectedCats.flatMap((c) => c.phrases);
+  const practicePhrases = selectedCats.flatMap((c) =>
+    c.phrases.map((p) => ({ ...p, categoryName: c.name })),
+  );
+  const multiCat = selectedCats.length > 1;
   const poolLabel =
     selectedCats.length === 0
       ? ''
@@ -201,6 +204,7 @@ export default function App() {
               phrases={practicePhrases}
               poolLabel={poolLabel}
               poolKey={poolKey}
+              multiCat={multiCat}
               settings={effectiveSettings}
               recordFocusTurn={recordFocusTurn}
               recordFreeTurn={recordFreeTurn}

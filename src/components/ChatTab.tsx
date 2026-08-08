@@ -13,10 +13,20 @@ import { focusTurn, freeTurn, friendlyError, type Turn } from '../lib/gemini';
 import { synthCloud } from '../lib/cloudtts';
 import { isSpeechRecognitionSupported, startRecognition, type Recognizer } from '../lib/speech';
 
+type PracticePhrase = Phrase & { categoryName?: string };
+
+// 카테고리 이름 → 안정적인 색상(hue). 뱃지 색 구분용.
+function catHue(name: string): number {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 360;
+  return h;
+}
+
 interface Props {
-  phrases: Phrase[];
+  phrases: PracticePhrase[];
   poolLabel: string;
   poolKey: string;
+  multiCat: boolean;
   settings: Settings;
   recordFocusTurn: (phraseText: string, clean: boolean) => void;
   recordFreeTurn: () => void;
@@ -219,6 +229,7 @@ export default function ChatTab({
   phrases,
   poolLabel,
   poolKey,
+  multiCat,
   settings,
   recordFocusTurn,
   recordFreeTurn,
@@ -243,7 +254,7 @@ export default function ChatTab({
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const turnsRef = useRef<Turn[]>([]);
 
-  const phrase: Phrase | undefined = phrases[phraseIdx];
+  const phrase: PracticePhrase | undefined = phrases[phraseIdx];
   const model = settings.model?.trim() || 'gemini-3.5-flash-lite';
 
   const resetSession = () => {
@@ -530,6 +541,14 @@ export default function ChatTab({
           </div>
           {mode === 'focus' ? (
             <>
+              {multiCat && phrase?.categoryName && (
+                <span
+                  className="cat-badge"
+                  style={{ ['--h' as string]: catHue(phrase.categoryName), marginBottom: 6 }}
+                >
+                  {phrase.categoryName}
+                </span>
+              )}
               <div className="phrase">
                 {phrase?.text}
                 {phrase?.note && <span className="note">{phrase.note}</span>}
@@ -562,7 +581,7 @@ export default function ChatTab({
             >
               {phrases.map((p, i) => (
                 <option key={p.id} value={i}>
-                  {p.text}
+                  {multiCat && p.categoryName ? `${p.text}  ·  ${p.categoryName}` : p.text}
                 </option>
               ))}
             </select>
