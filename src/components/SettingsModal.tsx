@@ -295,15 +295,14 @@ export default function SettingsModal({
                       setCloudMsg('브라우저가 재생을 막았어요. 한 번 더 눌러주세요.');
                     }
                   } catch (e) {
+                    const emsg = (e instanceof Error ? e.message : String(e)).slice(0, 120);
                     if (isQuotaError(e)) {
                       markQuotaHit(engine);
                       bumpQuota((n) => n + 1);
                     }
-                    if (browserTtsSupported() && speakBrowser("I'm starting to like this app.")) {
-                      setCloudMsg('한도 초과 — 브라우저 음성으로 재생했어요.');
-                    } else {
-                      setCloudMsg('실패: ' + (e instanceof Error ? e.message : String(e)).slice(0, 90));
-                    }
+                    // 폴백으로 브라우저 음성이 나더라도 '진짜 실패 이유'를 보여준다
+                    if (browserTtsSupported()) speakBrowser("I'm starting to like this app.");
+                    setCloudMsg('실패: ' + emsg + ' (브라우저 음성으로 대체 재생)');
                   }
                 }}
               >

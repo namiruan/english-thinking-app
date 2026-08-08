@@ -390,10 +390,14 @@ export default function ChatTab({
     if (!ok) setSpeakingId(null);
     return ok;
   };
-  const noteFallbackOnce = () => {
+  const noteFallbackOnce = (quota: boolean) => {
     if (fallbackNotedRef.current) return;
     fallbackNotedRef.current = true;
-    showToast('🔊 무료 음성 한도 초과 — 브라우저 음성으로 대체해요.');
+    showToast(
+      quota
+        ? '🔊 무료 음성 한도 초과 — 브라우저 음성으로 대체해요.'
+        : '🔊 클라우드 음성을 쓸 수 없어 브라우저 음성으로 대체해요.',
+    );
   };
 
   // 페이지 어디든 첫 사용자 제스처에서 미리 잠금해제
@@ -479,10 +483,11 @@ export default function ChatTab({
       );
       await playBytes(bytes, id);
     } catch (e) {
-      if (isQuotaError(e)) markQuotaHit(settings.ttsEngine);
+      const quota = isQuotaError(e);
+      if (quota) markQuotaHit(settings.ttsEngine);
       // 클라우드 실패(한도 429 등) → 브라우저 내장 음성으로 대체
       if (browserTtsSupported() && playBrowser(text, id)) {
-        noteFallbackOnce();
+        noteFallbackOnce(quota);
       } else {
         setSpeakingId(null);
         showToast(`🔊 음성 실패: ${friendlyError(e)}`);
@@ -499,6 +504,7 @@ export default function ChatTab({
     if (!settings.autoSpeak || !ttsText || !settings.ttsUrl) return push(data);
     let bytes: ArrayBuffer | null = null;
     let failed = false;
+    let quota = false;
     try {
       bytes = await synthCloudBuffer(
         settings.ttsUrl,
@@ -510,14 +516,15 @@ export default function ChatTab({
       );
     } catch (e) {
       failed = true; // 한도 초과 등 → 브라우저 음성으로 대체
-      if (isQuotaError(e)) markQuotaHit(settings.ttsEngine);
+      quota = isQuotaError(e);
+      if (quota) markQuotaHit(settings.ttsEngine);
     }
     const msg = push(data);
     const id = `${msg.id}:${suffix}`;
     if (bytes) {
       await playBytes(bytes, id);
     } else if (failed && browserTtsSupported()) {
-      if (playBrowser(ttsText, id)) noteFallbackOnce();
+      if (playBrowser(ttsText, id)) noteFallbackOnce(quota);
     }
     return msg;
   };
