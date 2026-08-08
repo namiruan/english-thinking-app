@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Category, GitHubConfig, Settings } from '../types';
+import type { GitHubConfig, Settings } from '../types';
 import { CHAT_MODELS } from '../lib/gemini';
 import {
   CLOUD_MODELS,
@@ -7,17 +7,18 @@ import {
   voicesForModel,
   defaultVoiceForModel,
 } from '../lib/cloudtts';
-import { encryptSecret, type EncryptedBlob } from '../lib/crypto';
+import { encryptSecret } from '../lib/crypto';
 import { buildVaultJson } from '../lib/vault';
-import { commitFile } from '../lib/github';
+import { encryptData, pushVault, type SyncData } from '../lib/sync';
 import { defaultGitHub } from '../store';
 
 interface Props {
   settings: Settings;
-  categories: Category[];
-  vaultSecret?: EncryptedBlob;
+  syncData: SyncData;
   hasKey: boolean;
+  sessionPassword: string | null;
   onSave: (s: Settings) => void;
+  onSynced: (password: string) => void;
   onClearKey: () => void;
   onClose: () => void;
 }
@@ -33,10 +34,11 @@ function download(filename: string, text: string) {
 
 export default function SettingsModal({
   settings,
-  categories,
-  vaultSecret,
+  syncData,
   hasKey,
+  sessionPassword,
   onSave,
+  onSynced,
   onClearKey,
   onClose,
 }: Props) {
@@ -61,14 +63,17 @@ export default function SettingsModal({
   const gh: GitHubConfig = draft.github ?? defaultGitHub;
   const setGh = (patch: Partial<GitHubConfig>) => setDraft({ ...draft, github: { ...gh, ...patch } });
 
-  /** API 키 + 구문을 모두 비번으로 암호화한 vault.json 생성 (비공개) */
-  const buildEncryptedVault = async (): Promise<string> => {
+  /** 전체 동기화 데이터(구문·단어장·진도·설정·토큰)를 draft 기준으로 구성 */
+  const buildFullData = (): SyncData => {
+    const apiKey = (expKey.trim() || draft.apiKey || '').trim();
+    return { ...syncData, settings: { ...draft, apiKey, github: gh } };
+  };
+  // 암호화에 쓸 비밀번호: 이미 잠금 해제됐으면 그 비번 재사용, 아니면 입력값 검증
+  const resolvePassword = (): string => {
+    if (sessionPassword) return sessionPassword;
     if (pw.length < 8) throw new Error('비밀번호는 8자 이상을 권장해요. (길수록 안전)');
     if (pw !== pw2) throw new Error('비밀번호 확인이 일치하지 않아요.');
-    const apiKey = expKey.trim() || settings.apiKey || '';
-    const secret = apiKey ? await encryptSecret(apiKey, pw) : undefined;
-    const phrasesEnc = await encryptSecret(JSON.stringify(categories), pw);
-    return buildVaultJson({ phrasesEnc, secret });
+    return pw;
   };
 
   const makeFile = async () => {
@@ -76,7 +81,11 @@ export default function SettingsModal({
     setCommitUrl('');
     setBusy(true);
     try {
-      setGenerated(await buildEncryptedVault());
+      const data = buildFullData();
+      const password = resolvePassword();
+      const dataEnc = await encryptData(data, password);
+      const secret = data.settings.apiKey ? await encryptSecret(data.settings.apiKey, password) : undefined;
+      setGenerated(buildVaultJson({ dataEnc, secret }));
       setMsg('파일을 만들었어요. 다운로드하거나 GitHub에 바로 저장하세요.');
     } catch (e) {
       setMsg(e instanceof Error ? e.message : String(e));
@@ -94,12 +103,13 @@ export default function SettingsModal({
     }
     setBusyGit(true);
     try {
-      const content = await buildEncryptedVault();
-      setGenerated(content);
-      onSave(draft); // 토큰·설정 저장(브라우저)
-      const url = await commitFile(gh, content, 'Update vault via app');
+      const data = buildFullData();
+      const password = resolvePassword();
+      onSave(data.settings); // 토큰·설정·API키 저장(브라우저)
+      const url = await pushVault({ ...defaultGitHub, ...gh }, password, data);
+      onSynced(password); // 세션 비번 유지 → 이후 자동 동기화
       setCommitUrl(url);
-      setMsg('✅ GitHub에 저장했어요! 약 30초 후 라이브에 반영됩니다.');
+      setMsg('✅ GitHub에 저장했어요! 이제 변경할 때마다 자동으로 동기화돼요.');
     } catch (e) {
       setMsg('저장 실패: ' + (e instanceof Error ? e.message : String(e)));
     } finally {
@@ -292,41 +302,49 @@ export default function SettingsModal({
 
         {/* ── git에 저장 (암호화 + 자동 커밋) ── */}
         <div style={{ borderTop: '1px solid var(--border)', paddingTop: 18 }}>
-          <div className="section-label">🔐 git에 저장 (vault.json)</div>
+          <div className="section-label">☁ 기기 간 동기화 (GitHub)</div>
           <p className="hint" style={{ margin: '0 0 14px' }}>
-            API 키를 <b>비밀번호로 암호화</b>해 저장해요. 원본 키는 저장되지 않고, 공개돼도 비밀번호
-            없이는 열 수 없어요. 구문도 함께 저장됩니다. (키를 비우면 기존 잠금은 그대로 두고 구문만
-            갱신)
+            구문·단어장·진도·설정·API 키를 <b>비밀번호로 암호화</b>해 저장하고, 이후엔{' '}
+            <b>변경할 때마다 자동으로 동기화</b>돼요. 공개 저장소엔 암호문만 올라가고, GitHub 토큰도
+            암호화되어 함께 저장돼서 다른 기기에선 <b>비밀번호만</b> 넣으면 이어서 볼 수 있어요.
           </p>
 
-          <div className="field" style={{ marginBottom: 10 }}>
-            <label>암호화할 API 키 (선택)</label>
-            <input
-              className="input"
-              type="password"
-              placeholder="새로 잠글 Gemini API 키"
-              value={expKey}
-              onChange={(e) => setExpKey(e.target.value)}
-            />
-          </div>
-          <div className="row" style={{ marginBottom: 16 }}>
-            <input
-              className="input"
-              type="password"
-              placeholder="비밀번호"
-              value={pw}
-              onChange={(e) => setPw(e.target.value)}
-              style={{ flex: 1 }}
-            />
-            <input
-              className="input"
-              type="password"
-              placeholder="비밀번호 확인"
-              value={pw2}
-              onChange={(e) => setPw2(e.target.value)}
-              style={{ flex: 1 }}
-            />
-          </div>
+          {sessionPassword ? (
+            <p className="hint" style={{ margin: '0 0 14px', color: 'var(--good)' }}>
+              ✓ 이미 잠금 해제됨 — 비밀번호 재입력 없이 저장돼요.
+            </p>
+          ) : (
+            <>
+              <div className="field" style={{ marginBottom: 10 }}>
+                <label>암호화할 API 키 (선택)</label>
+                <input
+                  className="input"
+                  type="password"
+                  placeholder="새로 잠글 Gemini API 키"
+                  value={expKey}
+                  onChange={(e) => setExpKey(e.target.value)}
+                />
+              </div>
+              <div className="row" style={{ marginBottom: 16 }}>
+                <input
+                  className="input"
+                  type="password"
+                  placeholder="비밀번호"
+                  value={pw}
+                  onChange={(e) => setPw(e.target.value)}
+                  style={{ flex: 1 }}
+                />
+                <input
+                  className="input"
+                  type="password"
+                  placeholder="비밀번호 확인"
+                  value={pw2}
+                  onChange={(e) => setPw2(e.target.value)}
+                  style={{ flex: 1 }}
+                />
+              </div>
+            </>
+          )}
 
           {/* GitHub 자동 저장 */}
           <div className="field" style={{ marginBottom: 8 }}>
@@ -364,7 +382,7 @@ export default function SettingsModal({
 
           <div className="row">
             <button className="btn primary" onClick={saveToGitHub} disabled={busyGit || busy}>
-              {busyGit ? <span className="spinner" /> : '🚀 GitHub에 바로 저장'}
+              {busyGit ? <span className="spinner" /> : '☁ 동기화 켜기 / 지금 저장'}
             </button>
             <button className="btn" onClick={makeFile} disabled={busy || busyGit}>
               {busy ? <span className="spinner" /> : '파일만 만들기'}

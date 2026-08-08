@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Category, Settings } from './types';
 import {
   defaultSettings,
+  defaultGitHub,
   seedCategories,
   useGrammarStats,
   useProgress,
@@ -10,15 +11,17 @@ import {
 } from './store';
 import { loadVault, type Vault } from './lib/vault';
 import { decryptSecret } from './lib/crypto';
-
-const REMEMBER_PW_KEY = 'et.rememberedPw';
+import { decryptData, snapshot, pushVault, type SyncData } from './lib/sync';
 import ChatTab from './components/ChatTab';
 import RegisterTab from './components/RegisterTab';
 import HistoryTab from './components/HistoryTab';
 import WordbookTab from './components/WordbookTab';
 import SettingsModal from './components/SettingsModal';
-import UnlockModal from './components/UnlockModal';
+import UnlockModal, { type UnlockResult } from './components/UnlockModal';
 import SelectionLookup from './components/SelectionLookup';
+
+const REMEMBER_PW_KEY = 'et.rememberedPw';
+type SyncStatus = 'off' | 'idle' | 'syncing' | 'synced' | 'error';
 
 type Tab = 'register' | 'chat' | 'history' | 'wordbook';
 
@@ -29,9 +32,9 @@ export default function App() {
     'et.selectedCats',
     seedCategories[0]?.id ? [seedCategories[0].id] : [],
   );
-  const { progress, recordFocusTurn, recordFreeTurn, clearProgress } = useProgress();
-  const { grammarStats, addGrammar, clearGrammar } = useGrammarStats();
-  const { words, addWord, removeWord, clearWords } = useWordbook();
+  const { progress, setProgress, recordFocusTurn, recordFreeTurn, clearProgress } = useProgress();
+  const { grammarStats, setGrammarStats, addGrammar, clearGrammar } = useGrammarStats();
+  const { words, setWords, addWord, removeWord, clearWords } = useWordbook();
 
   // 복습용 단어 (많이 저장된 순 상위 8개) → 대화에 재노출
   const studyWords = useMemo(
@@ -52,6 +55,11 @@ export default function App() {
   const [sessionKey, setSessionKey] = useState<string | null>(null);
   const [unlocked, setUnlocked] = useState(false);
 
+  // 동기화 (GitHub)
+  const [sessionPassword, setSessionPassword] = useState<string | null>(null);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>('off');
+  const lastSyncedHashRef = useRef<string | null>(null);
+
   // 부팅: vault 로드 + 최초 구문 시드
   useEffect(() => {
     let alive = true;
@@ -59,24 +67,28 @@ export default function App() {
       const v = await loadVault();
       if (!alive) return;
       setVault(v);
-      // 암호화된 구문(phrasesEnc)이면 잠금 해제 후 채워짐 → 여기선 시드 안 함
-      if (!v?.phrasesEnc && !localStorage.getItem('et.initialized')) {
+      // 암호화 자료(dataEnc/phrasesEnc)면 잠금 해제 후 채워짐 → 여기선 시드 안 함
+      if (!v?.dataEnc && !v?.phrasesEnc && !localStorage.getItem('et.initialized')) {
         const phrases = v?.phrases?.length ? v.phrases : seedCategories;
         setCategories(phrases);
         setSelectedCatIds(phrases[0]?.id ? [phrases[0].id] : []);
         localStorage.setItem('et.initialized', '1');
       }
       // 이 기기에 기억된 비밀번호가 있으면 자동으로 잠금 해제
-      if (v && (v.secret || v.phrasesEnc)) {
+      if (v && (v.dataEnc || v.secret || v.phrasesEnc)) {
         const remembered = localStorage.getItem(REMEMBER_PW_KEY);
         if (remembered) {
           try {
-            let apiKey: string | null = null;
-            let cats: Category[] | null = null;
-            if (v.secret) apiKey = await decryptSecret(v.secret, remembered);
-            if (v.phrasesEnc) cats = JSON.parse(await decryptSecret(v.phrasesEnc, remembered)) as Category[];
+            const res: UnlockResult = {};
+            if (v.dataEnc) {
+              res.data = await decryptData(v.dataEnc, remembered);
+            } else {
+              if (v.secret) res.apiKey = await decryptSecret(v.secret, remembered);
+              if (v.phrasesEnc)
+                res.categories = JSON.parse(await decryptSecret(v.phrasesEnc, remembered)) as Category[];
+            }
             if (!alive) return;
-            handleUnlock(apiKey, cats);
+            handleUnlock(res, remembered);
           } catch {
             localStorage.removeItem(REMEMBER_PW_KEY);
           }
@@ -97,7 +109,7 @@ export default function App() {
   );
 
   // 비번 강제: vault에 암호화 자료가 있으면 잠금 해제 전까지 앱을 막음
-  const locked = booted && !!(vault?.secret || vault?.phrasesEnc) && !unlocked;
+  const locked = booted && !!(vault?.dataEnc || vault?.secret || vault?.phrasesEnc) && !unlocked;
 
   // 연습 대상 = 선택된 카테고리들의 구문 합집합
   const selectedCats = categories.filter((c) => selectedCatIds.includes(c.id));
@@ -118,11 +130,30 @@ export default function App() {
   const addSelected = (id: string) =>
     setSelectedCatIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
 
-  const handleUnlock = (key: string | null, cats: Category[] | null) => {
-    if (key) setSessionKey(key);
-    if (cats && cats.length) {
-      setCategories(cats);
-      setSelectedCatIds(cats[0]?.id ? [cats[0].id] : []);
+  // 전체 동기화 데이터로 로컬 상태를 교체 (다른 기기에서 만든 최신본 반영)
+  const hydrate = (data: SyncData) => {
+    if (data.categories) setCategories(data.categories);
+    if (data.selectedCatIds) setSelectedCatIds(data.selectedCatIds);
+    if (data.wordbook) setWords(data.wordbook);
+    if (data.progress) setProgress(data.progress);
+    if (data.grammar) setGrammarStats(data.grammar);
+    if (data.settings) setSettings(data.settings);
+    // 방금 불러온 상태 = 최신 → 즉시 되-push 방지
+    lastSyncedHashRef.current = snapshot(data);
+  };
+
+  const handleUnlock = (res: UnlockResult, password: string) => {
+    setSessionPassword(password);
+    if (res.data) {
+      hydrate(res.data);
+      if (res.data.settings?.apiKey) setSessionKey(res.data.settings.apiKey);
+      setSyncStatus(res.data.settings?.github?.token ? 'idle' : 'off');
+    } else {
+      if (res.apiKey) setSessionKey(res.apiKey);
+      if (res.categories && res.categories.length) {
+        setCategories(res.categories);
+        setSelectedCatIds(res.categories[0]?.id ? [res.categories[0].id] : []);
+      }
     }
     setUnlocked(true);
   };
@@ -137,9 +168,47 @@ export default function App() {
   const lockNow = () => {
     localStorage.removeItem(REMEMBER_PW_KEY);
     setSessionKey(null);
+    setSessionPassword(null);
     setUnlocked(false);
   };
-  const hasLock = !!(vault?.secret || vault?.phrasesEnc);
+  const hasLock = !!(vault?.dataEnc || vault?.secret || vault?.phrasesEnc);
+
+  // 현재 전체 상태 스냅샷
+  const currentData: SyncData = useMemo(
+    () => ({
+      categories,
+      selectedCatIds,
+      wordbook: words,
+      progress,
+      grammar: grammarStats,
+      settings,
+    }),
+    [categories, selectedCatIds, words, progress, grammarStats, settings],
+  );
+
+  // 자동 동기화: 변경되면 디바운스 후 암호화 vault 를 GitHub 에 push
+  useEffect(() => {
+    if (!unlocked || !sessionPassword) return;
+    const gh = settings.github;
+    if (!gh?.token) {
+      setSyncStatus('off');
+      return;
+    }
+    const snap = snapshot(currentData);
+    if (snap === lastSyncedHashRef.current) return; // 변경 없음
+    const cfg = { ...defaultGitHub, ...gh };
+    const t = setTimeout(async () => {
+      setSyncStatus('syncing');
+      try {
+        await pushVault(cfg, sessionPassword, currentData);
+        lastSyncedHashRef.current = snap;
+        setSyncStatus('synced');
+      } catch {
+        setSyncStatus('error');
+      }
+    }, 4000);
+    return () => clearTimeout(t);
+  }, [currentData, unlocked, sessionPassword, settings.github]);
 
   return (
     <div className="app">
@@ -152,6 +221,17 @@ export default function App() {
           </div>
         </div>
         <div className="row" style={{ gap: 6 }}>
+          {!locked && syncStatus !== 'off' && (
+            <span className={`sync-badge ${syncStatus}`} title="기기 간 동기화 상태">
+              {syncStatus === 'syncing'
+                ? '동기화 중…'
+                : syncStatus === 'synced'
+                  ? '☁ 동기화됨'
+                  : syncStatus === 'error'
+                    ? '⚠ 동기화 실패'
+                    : '☁ 동기화'}
+            </span>
+          )}
           {hasLock && !locked && (
             <button className="icon-btn" onClick={lockNow} title="잠그기 (기억된 비밀번호 지우기)">
               🔒
@@ -167,6 +247,7 @@ export default function App() {
         <UnlockModal
           secret={vault?.secret}
           phrasesEnc={vault?.phrasesEnc}
+          dataEnc={vault?.dataEnc}
           onUnlock={handleUnlock}
         />
       ) : (
@@ -231,10 +312,15 @@ export default function App() {
           {showSettings && (
             <SettingsModal
               settings={effectiveSettings}
-              categories={categories}
-              vaultSecret={vault?.secret}
+              syncData={currentData}
               hasKey={!!effectiveKey}
+              sessionPassword={sessionPassword}
               onSave={setSettings}
+              onSynced={(pw) => {
+                setSessionPassword(pw);
+                lastSyncedHashRef.current = snapshot(currentData);
+                setSyncStatus('synced');
+              }}
               onClearKey={clearKey}
               onClose={() => setShowSettings(false)}
             />

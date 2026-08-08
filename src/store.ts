@@ -105,7 +105,7 @@ export function useGrammarStats() {
     [setGrammarStats],
   );
   const clearGrammar = useCallback(() => setGrammarStats({}), [setGrammarStats]);
-  return { grammarStats, addGrammar, clearGrammar };
+  return { grammarStats, setGrammarStats, addGrammar, clearGrammar };
 }
 
 // ── 학습 진행상황 (자동 저장) ──────────────────────────
@@ -174,7 +174,7 @@ export function useProgress() {
     [setProgress],
   );
 
-  return { progress, recordFocusTurn, recordFreeTurn, clearProgress };
+  return { progress, setProgress, recordFocusTurn, recordFreeTurn, clearProgress };
 }
 
 // ── 단어장 ──────────────────────────────────────────────
@@ -210,7 +210,7 @@ export function useWordbook() {
     [setWords],
   );
   const clearWords = useCallback(() => setWords({}), [setWords]);
-  return { words, addWord, removeWord, clearWords };
+  return { words, setWords, addWord, removeWord, clearWords };
 }
 
 export function useHistory() {

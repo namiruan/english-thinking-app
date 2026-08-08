@@ -1,15 +1,23 @@
 import { useState } from 'react';
 import type { EncryptedBlob } from '../lib/crypto';
 import { decryptSecret } from '../lib/crypto';
+import { decryptData, type SyncData } from '../lib/sync';
 import type { Category } from '../types';
+
+export interface UnlockResult {
+  data?: SyncData; // dataEnc 복호화 결과 (전체 동기화 데이터)
+  apiKey?: string | null; // 레거시: secret 복호화
+  categories?: Category[] | null; // 레거시: phrasesEnc 복호화
+}
 
 interface Props {
   secret?: EncryptedBlob;
   phrasesEnc?: EncryptedBlob;
-  onUnlock: (apiKey: string | null, categories: Category[] | null) => void;
+  dataEnc?: EncryptedBlob;
+  onUnlock: (res: UnlockResult, password: string) => void;
 }
 
-export default function UnlockModal({ secret, phrasesEnc, onUnlock }: Props) {
+export default function UnlockModal({ secret, phrasesEnc, dataEnc, onUnlock }: Props) {
   const [pw, setPw] = useState('');
   const [remember, setRemember] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -20,14 +28,17 @@ export default function UnlockModal({ secret, phrasesEnc, onUnlock }: Props) {
     setBusy(true);
     setError('');
     try {
-      let apiKey: string | null = null;
-      let categories: Category[] | null = null;
-      if (secret) apiKey = await decryptSecret(secret, pw);
-      if (phrasesEnc) categories = JSON.parse(await decryptSecret(phrasesEnc, pw)) as Category[];
+      const res: UnlockResult = {};
+      if (dataEnc) {
+        res.data = await decryptData(dataEnc, pw);
+      } else {
+        if (secret) res.apiKey = await decryptSecret(secret, pw);
+        if (phrasesEnc) res.categories = JSON.parse(await decryptSecret(phrasesEnc, pw)) as Category[];
+      }
       // 비밀번호가 맞았을 때만 기기에 기억 (다음부터 자동 잠금 해제)
       if (remember) localStorage.setItem('et.rememberedPw', pw);
       else localStorage.removeItem('et.rememberedPw');
-      onUnlock(apiKey, categories);
+      onUnlock(res, pw);
     } catch {
       setError('비밀번호가 올바르지 않아요.');
       setBusy(false);

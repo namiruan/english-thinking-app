@@ -5,8 +5,9 @@ import type { EncryptedBlob } from './crypto';
 export interface Vault {
   version: number;
   phrases?: Category[]; // 평문 구문 (레거시/공개)
-  phrasesEnc?: EncryptedBlob; // 비밀번호로 암호화된 구문 (비공개)
-  secret?: EncryptedBlob; // 비밀번호로 암호화된 API 키
+  phrasesEnc?: EncryptedBlob; // 비밀번호로 암호화된 구문 (레거시)
+  dataEnc?: EncryptedBlob; // 비밀번호로 암호화된 전체 동기화 데이터 (구문·단어장·진도·설정·토큰)
+  secret?: EncryptedBlob; // 비밀번호로 암호화된 API 키 (잠금 감지/레거시)
 }
 
 /** 배포된 vault.json 을 불러온다. 없으면 null. */
@@ -24,11 +25,13 @@ export async function loadVault(): Promise<Vault | null> {
 export function buildVaultJson(opts: {
   phrases?: Category[];
   phrasesEnc?: EncryptedBlob;
+  dataEnc?: EncryptedBlob;
   secret?: EncryptedBlob;
 }): string {
   const vault: Vault = { version: 1 };
+  if (opts.dataEnc) vault.dataEnc = opts.dataEnc;
   if (opts.phrasesEnc) vault.phrasesEnc = opts.phrasesEnc;
-  else if (opts.phrases) vault.phrases = opts.phrases;
+  else if (opts.phrases && !opts.dataEnc) vault.phrases = opts.phrases;
   if (opts.secret) vault.secret = opts.secret;
   return JSON.stringify(vault, null, 2) + '\n';
 }

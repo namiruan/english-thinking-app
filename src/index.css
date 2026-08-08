@@ -261,6 +261,27 @@ select {
   background: var(--accent-soft);
   color: var(--accent);
 }
+/* 동기화 상태 뱃지 */
+.sync-badge {
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.sync-badge.synced {
+  background: var(--good-soft);
+  color: var(--good);
+}
+.sync-badge.syncing {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.sync-badge.error {
+  color: var(--danger);
+}
 /* 카테고리 구분 뱃지 (색은 --h 로 카테고리마다 다르게) */
 .cat-badge {
   display: inline-flex;
