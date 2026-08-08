@@ -12,6 +12,7 @@ import { newId } from '../store';
 import { focusTurn, freeTurn, friendlyError, type Turn } from '../lib/gemini';
 import { synthCloud } from '../lib/cloudtts';
 import { catHue } from '../lib/ui';
+import PhraseCombobox from './PhraseCombobox';
 import { isSpeechRecognitionSupported, startRecognition, type Recognizer } from '../lib/speech';
 
 type PracticePhrase = Phrase & { categoryName?: string };
@@ -250,15 +251,6 @@ export default function ChatTab({
 
   const phrase: PracticePhrase | undefined = phrases[phraseIdx];
   const model = settings.model?.trim() || 'gemini-3.5-flash-lite';
-
-  // 드롭다운을 카테고리별로 묶기 (원래 인덱스 유지)
-  const phraseGroups: { name: string; items: { p: PracticePhrase; idx: number }[] }[] = [];
-  phrases.forEach((p, idx) => {
-    const name = p.categoryName ?? '';
-    const last = phraseGroups[phraseGroups.length - 1];
-    if (last && last.name === name) last.items.push({ p, idx });
-    else phraseGroups.push({ name, items: [{ p, idx }] });
-  });
 
   const resetSession = () => {
     // 진행상황은 매 턴 자동 저장되므로 여기선 현재 대화만 초기화
@@ -576,28 +568,12 @@ export default function ChatTab({
             </span>
           </div>
           {mode === 'focus' && phrases.length > 1 && (
-            <select
-              className="select"
-              style={{ width: 'auto', padding: '5px 8px', fontSize: 12 }}
+            <PhraseCombobox
+              phrases={phrases}
               value={phraseIdx}
-              onChange={(e) => setPhraseIdx(Number(e.target.value))}
-            >
-              {multiCat
-                ? phraseGroups.map((g) => (
-                    <optgroup key={g.name} label={`📁 ${g.name}`}>
-                      {g.items.map(({ p, idx }) => (
-                        <option key={p.id} value={idx}>
-                          {p.text}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))
-                : phrases.map((p, i) => (
-                    <option key={p.id} value={i}>
-                      {p.text}
-                    </option>
-                  ))}
-            </select>
+              onChange={setPhraseIdx}
+              multiCat={multiCat}
+            />
           )}
         </div>
       </div>

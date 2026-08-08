@@ -645,6 +645,114 @@ textarea.input:focus {
   border-color: var(--accent);
 }
 
+/* ── 검색 콤보박스 (연습 구문 선택) ───────── */
+.combo {
+  position: relative;
+}
+.combo-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 240px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 550;
+}
+.combo-trigger:hover {
+  border-color: var(--border-strong);
+}
+.combo-current {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.combo-caret {
+  color: var(--faint);
+  font-size: 10px;
+}
+.combo-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 40;
+  width: 260px;
+  max-width: 78vw;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.combo-search {
+  width: 100%;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  outline: none;
+}
+.combo-search:focus {
+  border-color: var(--accent);
+}
+.combo-list {
+  max-height: 260px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.combo-group {
+  font-size: 11px;
+  font-weight: 700;
+  color: hsl(var(--h) 65% 62%);
+  padding: 6px 8px 2px;
+}
+.combo-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--text);
+}
+.combo-item.active {
+  background: var(--surface-2);
+}
+.combo-item.selected {
+  color: var(--accent);
+  font-weight: 600;
+}
+.combo-item-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.combo-check {
+  color: var(--accent);
+  flex: none;
+}
+.combo-empty {
+  padding: 12px 10px;
+  font-size: 13px;
+  color: var(--faint);
+  text-align: center;
+}
+
 /* ── Phrase list ────────────────────────── */
 .phrase-item {
   display: flex;

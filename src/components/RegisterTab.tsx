@@ -37,7 +37,8 @@ export default function RegisterTab({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [importName, setImportName] = useState('');
-  const [importTargetId, setImportTargetId] = useState<string>('__new__');
+  const [importTargetId, setImportTargetId] = useState<string>(categories[0]?.id ?? '__new__');
+  const [creatingCat, setCreatingCat] = useState(false);
   const [importText, setImportText] = useState('');
   const [importMsg, setImportMsg] = useState('');
   const [importBusy, setImportBusy] = useState(false);
@@ -50,6 +51,23 @@ export default function RegisterTab({
     setCategories((prev) => [...prev, cat]);
     addSelected(cat.id);
     setNewCat('');
+  };
+
+  // 가져오기 대상 드롭다운에서 "새 카테고리 만들기" 확정
+  const confirmNewCat = () => {
+    const name = importName.trim();
+    if (!name) return;
+    const cat: Category = { id: newId(), name, phrases: [] };
+    setCategories((prev) => [...prev, cat]);
+    addSelected(cat.id);
+    setImportTargetId(cat.id);
+    setImportName('');
+    setCreatingCat(false);
+  };
+  const cancelNewCat = () => {
+    setCreatingCat(false);
+    setImportName('');
+    setImportTargetId(categories[0]?.id ?? '__new__');
   };
 
   // 붙여넣기 파싱: 빈 줄로 항목 구분.
@@ -285,27 +303,48 @@ export default function RegisterTab({
 
       <div className="card" style={{ padding: 16, marginBottom: 16 }}>
         <div className="section-label" style={{ marginBottom: 10 }}>가져오기 (붙여넣기)</div>
-        <select
-          className="select"
-          value={importTargetId}
-          onChange={(e) => setImportTargetId(e.target.value)}
-          style={{ marginBottom: 8 }}
-        >
-          {categories.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name} 에 추가
-            </option>
-          ))}
-          <option value="__new__">+ 새 카테고리 만들기</option>
-        </select>
-        {importTargetId === '__new__' && (
-          <input
-            className="input"
-            placeholder="새 카테고리 이름 (예: 티처조 영어식 사고 100)"
-            value={importName}
-            onChange={(e) => setImportName(e.target.value)}
+        {creatingCat ? (
+          <div className="row" style={{ marginBottom: 8, gap: 8, flexWrap: 'nowrap' }}>
+            <input
+              className="input"
+              autoFocus
+              placeholder="새 카테고리 이름 (예: 티처조 영어식 사고 100)"
+              value={importName}
+              onChange={(e) => setImportName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && confirmNewCat()}
+              style={{ flex: 1, minWidth: 0 }}
+            />
+            <button className="btn primary" onClick={confirmNewCat} disabled={!importName.trim()}>
+              입력완료
+            </button>
+            {categories.length > 0 && (
+              <button className="btn ghost" onClick={cancelNewCat} title="취소">
+                ✕
+              </button>
+            )}
+          </div>
+        ) : (
+          <select
+            className="select"
+            value={importTargetId}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v === '__new__') {
+                setImportName('');
+                setCreatingCat(true);
+              } else {
+                setImportTargetId(v);
+              }
+            }}
             style={{ marginBottom: 8 }}
-          />
+          >
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name} 에 추가
+              </option>
+            ))}
+            <option value="__new__">+ 새 카테고리 만들기</option>
+          </select>
         )}
         <textarea
           className="input"
