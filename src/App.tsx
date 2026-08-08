@@ -193,6 +193,7 @@ export default function App() {
               selectedCatIds={selectedCatIds}
               toggleSelected={toggleSelected}
               addSelected={addSelected}
+              addWord={addWord}
               apiKey={effectiveKey}
               model={effectiveSettings.model?.trim() || 'gemini-3.5-flash-lite'}
             />

@@ -279,18 +279,22 @@ export async function lookupTerm(
   apiKey: string,
   term: string,
   model: string = CHAT_MODEL,
+  context?: string,
 ): Promise<LookupResult> {
   const ai = client(apiKey);
+  const prompt = context
+    ? `Define the English term "${term}" AS IT IS USED in the following passage. Return the specific sense/meaning that fits THIS usage, not the most common or unrelated meaning.\n\nPassage:\n${context}`
+    : `Define: "${term}"`;
   const res = await withRetry(() =>
     ai.models.generateContent({
       model,
-      contents: [{ role: 'user', parts: [{ text: `Define: "${term}"` }] }],
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
       config: {
         systemInstruction: `You are a friendly bilingual (English-Korean) dictionary for beginners. For the given English word or phrase/idiom, return JSON:
 - "partOfSpeech": short type label (e.g. "verb", "noun", "idiom", "phrasal verb") or "".
 - "english": a VERY SIMPLE English definition that a 5-year-old kindergartner could understand. Use only the most basic, common words. One short sentence. NO hard or academic vocabulary. If a simpler everyday word exists, use it.
 - "korean": a natural, short Korean meaning.
-If it's an idiom or multi-word phrase, explain the whole expression in simple words, not individual words. Keep it short and easy.`,
+If a passage/context is given, choose the meaning that matches how the term is used THERE — even if it is not the most common meaning. If it's an idiom or multi-word phrase, explain the whole expression in simple words, not individual words. Keep it short and easy.`,
         responseMimeType: 'application/json',
         responseSchema: lookupSchema,
         temperature: 0.3,

@@ -9,6 +9,7 @@ interface Props {
   selectedCatIds: string[];
   toggleSelected: (id: string) => void;
   addSelected: (id: string) => void;
+  addWord: (w: { term: string; english: string; korean: string }) => void;
   apiKey?: string;
   model?: string;
 }
@@ -19,6 +20,7 @@ export default function RegisterTab({
   selectedCatIds,
   toggleSelected,
   addSelected,
+  addWord,
   apiKey,
   model,
 }: Props) {
@@ -97,38 +99,70 @@ export default function RegisterTab({
   };
 
   const importPhrases = async () => {
-    const phrases = parseBlocks(importText);
-    if (phrases.length === 0) {
-      setImportMsg('가져올 문장이 없어요. "" 안에 배울 구문이 있는지 확인해 주세요.');
+    const parsed = parseBlocks(importText);
+    if (parsed.length === 0) {
+      setImportMsg('가져올 내용이 없어요. "" 안에 배울 구문/단어가 있는지 확인해 주세요.');
       return;
     }
-    // 기존 카테고리에 추가할지, 새로 만들지
-    let targetId: string;
-    let targetName: string;
-    const existing = categories.find((c) => c.id === importTargetId);
-    if (importTargetId !== '__new__' && existing) {
-      targetId = existing.id;
-      targetName = existing.name;
-      setCategories((prev) =>
-        prev.map((c) => (c.id === targetId ? { ...c, phrases: [...c.phrases, ...phrases] } : c)),
-      );
-    } else {
-      const cat: Category = { id: newId(), name: importName.trim() || '가져온 문장', phrases };
-      targetId = cat.id;
-      targetName = cat.name;
-      setCategories((prev) => [...prev, cat]);
+    // 단어(공백 없는 단일 토큰) → 단어장, 구문(여러 단어) → 카테고리
+    const isSingleWord = (t: string) => !!t && !/\s/.test(t.trim());
+    const wordItems = parsed.filter((p) => isSingleWord(p.text));
+    const phraseItems = parsed.filter((p) => !isSingleWord(p.text));
+
+    // 1) 구문 → 카테고리 등록
+    let targetId = '';
+    let targetName = '';
+    if (phraseItems.length) {
+      const existing = categories.find((c) => c.id === importTargetId);
+      if (importTargetId !== '__new__' && existing) {
+        targetId = existing.id;
+        targetName = existing.name;
+        setCategories((prev) =>
+          prev.map((c) => (c.id === targetId ? { ...c, phrases: [...c.phrases, ...phraseItems] } : c)),
+        );
+      } else {
+        const cat: Category = { id: newId(), name: importName.trim() || '가져온 문장', phrases: phraseItems };
+        targetId = cat.id;
+        targetName = cat.name;
+        setCategories((prev) => [...prev, cat]);
+      }
+      addSelected(targetId);
     }
-    addSelected(targetId);
     setImportText('');
     setImportName('');
 
-    if (autoFill && apiKey && phrases.some((p) => !p.meaning)) {
-      setImportBusy(true);
-      setImportMsg(`✓ ${phrases.length}개 등록. 뜻을 채우는 중…`);
-      for (const p of phrases) {
+    const summary = () => {
+      const parts: string[] = [];
+      if (phraseItems.length) parts.push(`구문 ${phraseItems.length}개${targetName ? ` → "${targetName}"` : ''}`);
+      if (wordItems.length) parts.push(`단어 ${wordItems.length}개 → 단어장`);
+      return parts.join(', ');
+    };
+
+    setImportBusy(true);
+    setImportMsg(`✓ ${summary()} 등록.${autoFill && apiKey ? ' 뜻을 채우는 중…' : ''}`);
+
+    // 2) 단어 → 단어장 등록 (맥락 기반 뜻/영영 풀이)
+    for (const w of wordItems) {
+      let english = '';
+      let korean = w.meaning || '';
+      if (autoFill && apiKey) {
+        try {
+          const r = await lookupTerm(apiKey, w.text, model, w.explanation);
+          english = r.english;
+          korean = r.korean || korean;
+        } catch {
+          /* 실패 시 파싱값 사용 */
+        }
+      }
+      addWord({ term: w.text, english, korean });
+    }
+
+    // 3) 구문 뜻 자동 채우기 (맥락 기반)
+    if (autoFill && apiKey && targetId) {
+      for (const p of phraseItems) {
         if (p.meaning) continue;
         try {
-          const r = await lookupTerm(apiKey, p.text, model);
+          const r = await lookupTerm(apiKey, p.text, model, p.explanation);
           setCategories((prev) =>
             prev.map((c) =>
               c.id === targetId
@@ -140,9 +174,10 @@ export default function RegisterTab({
           /* 뜻 자동 채우기 실패는 건너뜀 */
         }
       }
-      setImportBusy(false);
     }
-    setImportMsg(`✓ ${phrases.length}개 항목을 "${targetName}"에 등록했어요.`);
+
+    setImportBusy(false);
+    setImportMsg(`✓ ${summary()} 등록 완료.`);
   };
 
   const addPhrase = (catId: string) => {
@@ -242,7 +277,8 @@ export default function RegisterTab({
         <div className="section-label">가져오기 (붙여넣기)</div>
         <p className="hint" style={{ margin: '0 0 10px' }}>
           "Think in English" 설명문을 그대로 붙여넣으세요. <b>"" 안의 표현 = 배울 구문</b>, 문단
-          전체 = 영어 풀이로 저장돼요. 뜻은 AI가 자동으로 채워줍니다. 여러 개면 <b>빈 줄</b>로 구분.
+          전체 = 영어 풀이로 저장돼요. 뜻은 문단 맥락에 맞게 AI가 자동으로 채워줍니다. <b>"" 안이 단어
+          한 개</b>면 카테고리 대신 <b>단어장</b>에 등록돼요. 여러 개면 <b>빈 줄</b>로 구분.
         </p>
         <select
           className="select"
