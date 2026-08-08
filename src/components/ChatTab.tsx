@@ -319,11 +319,18 @@ export default function ChatTab({
   };
   const primeAudio = () => {
     if (audioPrimedRef.current) return;
-    audioPrimedRef.current = true;
     try {
       const a = ensureAudio();
       a.src = SILENT_WAV;
-      a.play().then(() => a.pause()).catch(() => {});
+      a.play()
+        .then(() => {
+          a.pause();
+          a.currentTime = 0;
+          audioPrimedRef.current = true; // 실제로 재생에 성공했을 때만 '해제됨'으로 표시
+        })
+        .catch(() => {
+          /* 아직 해제 안 됨 → 다음 제스처에서 재시도 */
+        });
     } catch {
       /* ignore */
     }
@@ -333,6 +340,24 @@ export default function ChatTab({
     audioRef.current?.pause();
     setSpeakingId(null);
   };
+
+  // 자동재생 정책 대응: 페이지 어디든 첫 사용자 제스처에서 오디오를 미리 해제.
+  // (해제 성공 전까지 매 제스처마다 재시도 → 자동재생 차단 최소화)
+  useEffect(() => {
+    const unlock = () => {
+      if (!audioPrimedRef.current) primeAudio();
+    };
+    const opts: AddEventListenerOptions = { passive: true };
+    window.addEventListener('pointerdown', unlock, opts);
+    window.addEventListener('keydown', unlock, opts);
+    window.addEventListener('touchend', unlock, opts);
+    return () => {
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('keydown', unlock);
+      window.removeEventListener('touchend', unlock);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const playUrl = (url: string, id: string) => {
     const audio = ensureAudio();
@@ -346,6 +371,7 @@ export default function ChatTab({
     audio.onerror = () => setSpeakingId((cur) => (cur === id ? null : cur));
     audio.play().catch(() => {
       setSpeakingId(null);
+      audioPrimedRef.current = false; // 해제 실패 → 다음 제스처(또는 🔊 재클릭)에서 다시 해제 시도
       push({ role: 'model', text: '🔊 자동 재생이 차단됐어요. 스피커 버튼(🔊)을 한 번 더 눌러주세요.' });
     });
   };
