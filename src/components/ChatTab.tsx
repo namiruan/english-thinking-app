@@ -10,16 +10,9 @@ import type {
   TranslatedLine,
 } from '../types';
 import { newId } from '../store';
-import { focusTurn, freeTurn, friendlyError, synthesizeSpeech, type Turn } from '../lib/gemini';
-import { synthKokoro } from '../lib/kokoro';
+import { focusTurn, freeTurn, friendlyError, type Turn } from '../lib/gemini';
 import { synthCloud } from '../lib/cloudtts';
-import {
-  cancelBrowserSpeech,
-  isSpeechRecognitionSupported,
-  speakBrowser,
-  startRecognition,
-  type Recognizer,
-} from '../lib/speech';
+import { isSpeechRecognitionSupported, startRecognition, type Recognizer } from '../lib/speech';
 
 interface Props {
   category: Category | undefined;
@@ -250,7 +243,6 @@ export default function ChatTab({
   const phrases = category?.phrases ?? [];
   const phrase: Phrase | undefined = phrases[phraseIdx];
   const model = settings.model?.trim() || 'gemini-3.5-flash-lite';
-  const voiceEngine = settings.voiceEngine ?? 'gemini';
 
   const resetSession = () => {
     // 진행상황은 매 턴 자동 저장되므로 여기선 현재 대화만 초기화
@@ -274,7 +266,7 @@ export default function ChatTab({
   useEffect(() => {
     stopSpeaking();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [voiceEngine, settings.kokoroVoice, settings.browserVoice, settings.voice]);
+  }, [settings.cloudVoice, settings.ttsModel]);
 
   // 진행 중인 세션이 있으면 페이지 이탈(새로고침/닫기) 시 경고
   useEffect(() => {
@@ -316,12 +308,10 @@ export default function ChatTab({
 
   const stopSpeaking = () => {
     audioRef.current?.pause();
-    cancelBrowserSpeech();
     setSpeakingId(null);
   };
 
   const playUrl = (url: string, id: string) => {
-    cancelBrowserSpeech();
     const audio = ensureAudio();
     audio.pause();
     audio.src = url;
@@ -342,42 +332,15 @@ export default function ChatTab({
     if (!text) return;
     primeAudio(); // 클릭 제스처 안에서 오디오 해제
     stopSpeaking();
-    // 브라우저 음성: API 호출 없이 즉시 재생 (무료·무제한)
-    if (voiceEngine === 'browser') {
-      setSpeakingId(id);
-      speakBrowser(text, () => setSpeakingId((cur) => (cur === id ? null : cur)), {
-        voiceName: settings.browserVoice,
-      });
-      return;
-    }
-    // Kokoro: 브라우저 내장 신경망 TTS (로컬, 무료)
-    if (voiceEngine === 'kokoro') {
-      setSpeakingId(id);
-      try {
-        const url = await synthKokoro(text, settings.kokoroVoice);
-        playUrl(url, id);
-      } catch (e) {
-        setSpeakingId(null);
-        push({ role: 'model', text: `🔊 Kokoro 음성 실패: ${friendlyError(e)} (설정에서 음성 엔진을 바꿔보세요)` });
-      }
-      return;
-    }
-    // 클라우드 음성 (내 Cloudflare Worker)
-    if (voiceEngine === 'cloud') {
-      setSpeakingId(id);
-      try {
-        const url = await synthCloud(settings.ttsUrl || '', settings.ttsSecret || '', text, settings.cloudVoice);
-        playUrl(url, id);
-      } catch (e) {
-        setSpeakingId(null);
-        push({ role: 'model', text: `🔊 클라우드 음성 실패: ${friendlyError(e)}` });
-      }
-      return;
-    }
-    if (!settings.apiKey) return;
     setSpeakingId(id);
     try {
-      const url = await synthesizeSpeech(settings.apiKey, text, settings.voice);
+      const url = await synthCloud(
+        settings.ttsUrl || '',
+        settings.ttsSecret || '',
+        text,
+        settings.cloudVoice,
+        settings.ttsModel,
+      );
       playUrl(url, id);
     } catch (e) {
       setSpeakingId(null);
@@ -385,31 +348,22 @@ export default function ChatTab({
     }
   };
 
-  // 오디오를 먼저 합성한 뒤 텍스트와 "동시에" 노출·재생 (자동 재생용)
+  // 음성을 먼저 합성한 뒤 텍스트와 "동시에" 노출·재생 (자동 재생용)
   const pushWithSpeech = async (
     data: Omit<ChatMessage, 'id'>,
     ttsText: string,
     suffix: string,
   ) => {
-    if (!settings.autoSpeak || !ttsText) return push(data);
-
-    // 브라우저 음성: 로컬에서 즉시 시작 → 바로 노출하고 재생 (동시)
-    if (voiceEngine === 'browser') {
-      const msg = push(data);
-      speak(ttsText, `${msg.id}:${suffix}`);
-      return msg;
-    }
-
-    // Kokoro / Gemini: 음성을 먼저 합성한 뒤 텍스트와 "동시에" 노출·재생
+    if (!settings.autoSpeak || !ttsText || !settings.ttsUrl) return push(data);
     let url: string | null = null;
     try {
-      if (voiceEngine === 'kokoro') {
-        url = await synthKokoro(ttsText, settings.kokoroVoice);
-      } else if (voiceEngine === 'cloud') {
-        url = await synthCloud(settings.ttsUrl || '', settings.ttsSecret || '', ttsText, settings.cloudVoice);
-      } else if (settings.apiKey) {
-        url = await synthesizeSpeech(settings.apiKey, ttsText, settings.voice);
-      }
+      url = await synthCloud(
+        settings.ttsUrl,
+        settings.ttsSecret || '',
+        ttsText,
+        settings.cloudVoice,
+        settings.ttsModel,
+      );
     } catch {
       /* 합성 실패 시 텍스트만 노출 */
     }

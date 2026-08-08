@@ -1,9 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { Category, GitHubConfig, Settings } from '../types';
-import { TTS_VOICES, CHAT_MODELS } from '../lib/gemini';
-import { listEnglishVoices, onVoicesChanged, speakBrowser } from '../lib/speech';
-import { KOKORO_VOICES, loadKokoro, kokoroDevice } from '../lib/kokoro';
-import { CLOUD_VOICES, synthCloud } from '../lib/cloudtts';
+import { CHAT_MODELS } from '../lib/gemini';
+import { CLOUD_VOICES, CLOUD_MODELS, synthCloud } from '../lib/cloudtts';
 import { encryptSecret, type EncryptedBlob } from '../lib/crypto';
 import { buildVaultJson } from '../lib/vault';
 import { commitFile } from '../lib/github';
@@ -42,29 +40,7 @@ export default function SettingsModal({
     github: settings.github ?? defaultGitHub,
   });
 
-  const [browserVoices, setBrowserVoices] = useState(() => listEnglishVoices());
-  useEffect(() => {
-    setBrowserVoices(listEnglishVoices());
-    return onVoicesChanged(() => setBrowserVoices(listEnglishVoices()));
-  }, []);
-
-  const [kokoroPct, setKokoroPct] = useState<number | null>(null);
-  const [kokoroMsg, setKokoroMsg] = useState('');
   const [cloudMsg, setCloudMsg] = useState('');
-  const prepKokoro = async () => {
-    setKokoroMsg('');
-    setKokoroPct(0);
-    try {
-      await loadKokoro((p) => setKokoroPct(p));
-      setKokoroPct(100);
-      setKokoroMsg(
-        `✓ 준비 완료 · ${kokoroDevice() === 'webgpu' ? 'WebGPU 가속 (빠름)' : 'WASM/CPU (느릴 수 있음)'}`,
-      );
-    } catch (e) {
-      setKokoroPct(null);
-      setKokoroMsg('로드 실패: ' + (e instanceof Error ? e.message : String(e)));
-    }
-  };
 
   // vault 생성용
   const [expKey, setExpKey] = useState(settings.apiKey || '');
@@ -207,38 +183,33 @@ export default function SettingsModal({
         </div>
 
         <div className="field">
-          <label>음성 엔진</label>
+          <label>음성 (클라우드 TTS · Cloudflare)</label>
+          <input
+            className="input"
+            placeholder="https://et-tts.xxx.workers.dev"
+            value={draft.ttsUrl ?? ''}
+            onChange={(e) => setDraft({ ...draft, ttsUrl: e.target.value.trim() })}
+          />
+          <input
+            className="input"
+            style={{ marginTop: 8 }}
+            type="password"
+            placeholder="시크릿 (설정했다면)"
+            value={draft.ttsSecret ?? ''}
+            onChange={(e) => setDraft({ ...draft, ttsSecret: e.target.value })}
+          />
           <select
             className="select"
-            value={draft.voiceEngine ?? 'gemini'}
-            onChange={(e) =>
-              setDraft({ ...draft, voiceEngine: e.target.value as 'gemini' | 'browser' })
-            }
+            style={{ marginTop: 8 }}
+            value={draft.ttsModel ?? 'aura-1'}
+            onChange={(e) => setDraft({ ...draft, ttsModel: e.target.value })}
           >
-            <option value="gemini">Gemini 원어민 음성 (고품질 · 한도 사용)</option>
-            <option value="browser">브라우저 음성 (무료 · 무제한)</option>
-            <option value="kokoro">Kokoro 신경망 음성 (무료 · 무제한 · 자연스러움)</option>
-            <option value="cloud">클라우드 음성 (내 Cloudflare · 빠름 · 자연스러움)</option>
+            {CLOUD_MODELS.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.label}
+              </option>
+            ))}
           </select>
-        </div>
-
-        {draft.voiceEngine === 'cloud' && (
-          <div className="field">
-            <label>클라우드 TTS 서버 (Cloudflare Worker)</label>
-            <input
-              className="input"
-              placeholder="https://et-tts.xxx.workers.dev"
-              value={draft.ttsUrl ?? ''}
-              onChange={(e) => setDraft({ ...draft, ttsUrl: e.target.value.trim() })}
-            />
-            <input
-              className="input"
-              style={{ marginTop: 8 }}
-              type="password"
-              placeholder="시크릿 (설정했다면)"
-              value={draft.ttsSecret ?? ''}
-              onChange={(e) => setDraft({ ...draft, ttsSecret: e.target.value })}
-            />
             <div className="row" style={{ marginTop: 8, gap: 8 }}>
               <select
                 className="select"
@@ -263,6 +234,7 @@ export default function SettingsModal({
                       draft.ttsSecret || '',
                       "I'm starting to like this app.",
                       draft.cloudVoice,
+                      draft.ttsModel,
                     );
                     new Audio(url).play();
                     setCloudMsg('✓ 연결 성공');
@@ -284,98 +256,6 @@ export default function SettingsModal({
               모두 빠르고 자연스러워요.
             </p>
           </div>
-        )}
-
-        {draft.voiceEngine === 'kokoro' && (
-          <div className="field">
-            <label>Kokoro 음성</label>
-            <select
-              className="select"
-              value={draft.kokoroVoice ?? 'af_heart'}
-              onChange={(e) => setDraft({ ...draft, kokoroVoice: e.target.value })}
-            >
-              {KOKORO_VOICES.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.label}
-                </option>
-              ))}
-            </select>
-            <div className="row" style={{ marginTop: 8 }}>
-              <button className="btn" type="button" onClick={prepKokoro} disabled={kokoroPct !== null && kokoroPct < 100}>
-                {kokoroPct !== null && kokoroPct < 100 ? (
-                  <>
-                    <span className="spinner" /> {kokoroPct}%
-                  </>
-                ) : (
-                  '⬇ 음성 모델 준비'
-                )}
-              </button>
-              {kokoroMsg && (
-                <span className="hint" style={{ color: kokoroMsg.startsWith('✓') ? 'var(--good)' : 'var(--danger)' }}>
-                  {kokoroMsg}
-                </span>
-              )}
-            </div>
-            <p className="hint" style={{ margin: '8px 0 0' }}>
-              최초 1회 <b>~86MB 다운로드</b> 후 브라우저에 저장돼요. 그 다음부턴 오프라인·무제한.
-              Chrome/Edge 권장.
-            </p>
-          </div>
-        )}
-
-        {(draft.voiceEngine ?? 'gemini') === 'gemini' && (
-          <div className="field">
-            <label>원어민 음성 (Gemini)</label>
-            <select
-              className="select"
-              value={draft.voice}
-              onChange={(e) => setDraft({ ...draft, voice: e.target.value })}
-            >
-              {TTS_VOICES.map((v) => (
-                <option key={v} value={v}>
-                  {v}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        {(draft.voiceEngine ?? 'gemini') === 'browser' && (
-          <div className="field">
-            <label>브라우저 음성 선택</label>
-            <div className="row" style={{ gap: 8 }}>
-              <select
-                className="select"
-                style={{ flex: 1 }}
-                value={draft.browserVoice ?? ''}
-                onChange={(e) => setDraft({ ...draft, browserVoice: e.target.value || undefined })}
-              >
-                <option value="">자동 (가장 좋은 음성)</option>
-                {browserVoices.map((v) => (
-                  <option key={v.name} value={v.name}>
-                    {v.name} ({v.lang})
-                  </option>
-                ))}
-              </select>
-              <button
-                className="btn"
-                type="button"
-                onClick={() =>
-                  speakBrowser("I'm starting to like this app.", () => {}, {
-                    voiceName: draft.browserVoice,
-                  })
-                }
-              >
-                ▶ 미리듣기
-              </button>
-            </div>
-            <p className="hint" style={{ margin: '6px 0 0' }}>
-              {browserVoices.length === 0
-                ? '음성 목록을 불러오는 중… (Chrome/Edge에서 목소리가 더 다양해요)'
-                : '"Google / Natural / Enhanced" 이름이 보통 더 자연스러워요. 무료·무제한이에요.'}
-            </p>
-          </div>
-        )}
 
         <label className="toggle" style={{ marginBottom: 16 }}>
           <input

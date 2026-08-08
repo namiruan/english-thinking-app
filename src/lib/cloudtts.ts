@@ -22,11 +22,17 @@ export const CLOUD_VOICES: CloudVoice[] = [
   { id: 'angus', label: 'Angus · 남성 (아일랜드)' },
 ];
 
+export const CLOUD_MODELS = [
+  { id: 'aura-1', label: 'Aura-1 · 자연스러움 (음성 선택 가능)' },
+  { id: 'aura-2-en', label: 'Aura-2 · 더 표현력 좋음 (최신)' },
+];
+
 export async function synthCloud(
   url: string,
   secret: string,
   text: string,
   speaker = 'asteria',
+  model = 'aura-1',
 ): Promise<string> {
   if (!url) throw new Error('NO_TTS_URL');
   const res = await fetch(url, {
@@ -35,7 +41,7 @@ export async function synthCloud(
       'Content-Type': 'application/json',
       ...(secret ? { 'X-Secret': secret } : {}),
     },
-    body: JSON.stringify({ text, speaker }),
+    body: JSON.stringify({ text, speaker, model }),
   });
   if (!res.ok) {
     const detail = await res.text().catch(() => '');

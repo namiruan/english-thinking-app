@@ -37,12 +37,14 @@ export default {
     const speaker = String(body.speaker || 'asteria');
     if (!text) return new Response('no text', { status: 400, headers: CORS });
 
+    // 모델 선택 (화이트리스트)
+    const MODELS = { 'aura-1': '@cf/deepgram/aura-1', 'aura-2-en': '@cf/deepgram/aura-2-en' };
+    const modelId = MODELS[String(body.model || 'aura-1')] || MODELS['aura-1'];
+    // aura-1은 speaker 목록이 명확 → 지정, aura-2는 기본 화자 사용
+    const input = modelId.endsWith('aura-1') ? { text, speaker } : { text };
+
     try {
-      const resp = await env.AI.run(
-        '@cf/deepgram/aura-1',
-        { text, speaker },
-        { returnRawResponse: true },
-      );
+      const resp = await env.AI.run(modelId, input, { returnRawResponse: true });
       return new Response(resp.body, {
         headers: { ...CORS, 'Content-Type': 'audio/mpeg', 'Cache-Control': 'no-store' },
       });
