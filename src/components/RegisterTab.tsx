@@ -284,12 +284,7 @@ export default function RegisterTab({
       </div>
 
       <div className="card" style={{ padding: 16, marginBottom: 16 }}>
-        <div className="section-label">가져오기 (붙여넣기)</div>
-        <p className="hint" style={{ margin: '0 0 10px' }}>
-          "Think in English" 설명문을 그대로 붙여넣으세요. <b>"" 안의 표현 = 배울 구문</b>, 문단
-          전체 = 영어 풀이로 저장돼요. 뜻은 문단 맥락에 맞게 AI가 자동으로 채워줍니다. <b>"" 안이 단어
-          한 개</b>면 카테고리 대신 <b>단어장</b>에 등록돼요. 여러 개면 <b>빈 줄</b>로 구분.
-        </p>
+        <div className="section-label" style={{ marginBottom: 10 }}>가져오기 (붙여넣기)</div>
         <select
           className="select"
           value={importTargetId}
