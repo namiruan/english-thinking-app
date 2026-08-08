@@ -3,8 +3,10 @@ import type { GitHubConfig, Settings } from '../types';
 import { CHAT_MODELS } from '../lib/gemini';
 import {
   CLOUD_MODELS,
+  TTS_ENGINES,
   synthCloud,
-  voicesForModel,
+  voicesForEngine,
+  defaultVoiceForEngine,
   defaultVoiceForModel,
   isQuotaError,
   markQuotaHit,
@@ -52,7 +54,7 @@ export default function SettingsModal({
   });
 
   const [cloudMsg, setCloudMsg] = useState('');
-  const [quotaLocked, setQuotaLocked] = useState(isQuotaLocked());
+  const [, bumpQuota] = useState(0); // 미리듣기 한도감지 시 재렌더용
 
   // vault 생성용
   const [expKey, setExpKey] = useState(settings.apiKey || '');
@@ -67,6 +69,9 @@ export default function SettingsModal({
 
   const gh: GitHubConfig = draft.github ?? defaultGitHub;
   const setGh = (patch: Partial<GitHubConfig>) => setDraft({ ...draft, github: { ...gh, ...patch } });
+
+  const engine = draft.ttsEngine ?? 'cloudflare';
+  const quotaLocked = isQuotaLocked(engine);
 
   /** 전체 동기화 데이터(구문·단어장·진도·설정·토큰)를 draft 기준으로 구성 */
   const buildFullData = (): SyncData => {
@@ -201,7 +206,7 @@ export default function SettingsModal({
         </div>
 
         <div className="field">
-          <label>음성 (클라우드 TTS · Cloudflare)</label>
+          <label>음성 (클라우드 TTS)</label>
           <input
             className="input"
             placeholder="https://et-tts.xxx.workers.dev"
@@ -216,34 +221,52 @@ export default function SettingsModal({
             value={draft.ttsSecret ?? ''}
             onChange={(e) => setDraft({ ...draft, ttsSecret: e.target.value })}
           />
+          {/* 엔진 선택 */}
           <select
             className="select"
             style={{ marginTop: 8 }}
-            value={draft.ttsModel ?? 'aura-1'}
-            disabled={quotaLocked}
-            onChange={(e) =>
-              setDraft({
-                ...draft,
-                ttsModel: e.target.value,
-                cloudVoice: defaultVoiceForModel(e.target.value),
-              })
-            }
+            value={engine}
+            onChange={(e) => {
+              const ng = e.target.value as 'cloudflare' | 'google';
+              setDraft({ ...draft, ttsEngine: ng, cloudVoice: defaultVoiceForEngine(ng, draft.ttsModel) });
+            }}
           >
-            {CLOUD_MODELS.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.label}
+            {TTS_ENGINES.map((en) => (
+              <option key={en.id} value={en.id}>
+                {en.label}
               </option>
             ))}
           </select>
+          {engine === 'cloudflare' && (
+            <select
+              className="select"
+              style={{ marginTop: 8 }}
+              value={draft.ttsModel ?? 'aura-1'}
+              disabled={quotaLocked}
+              onChange={(e) =>
+                setDraft({
+                  ...draft,
+                  ttsModel: e.target.value,
+                  cloudVoice: defaultVoiceForModel(e.target.value),
+                })
+              }
+            >
+              {CLOUD_MODELS.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+          )}
             <div className="row" style={{ marginTop: 8, gap: 8 }}>
               <select
                 className="select"
                 style={{ flex: 1 }}
-                value={draft.cloudVoice ?? defaultVoiceForModel(draft.ttsModel)}
+                value={draft.cloudVoice ?? defaultVoiceForEngine(engine, draft.ttsModel)}
                 disabled={quotaLocked}
                 onChange={(e) => setDraft({ ...draft, cloudVoice: e.target.value })}
               >
-                {voicesForModel(draft.ttsModel).map((v) => (
+                {voicesForEngine(engine, draft.ttsModel).map((v) => (
                   <option key={v.id} value={v.id}>
                     {quotaLocked ? `🔒 ${v.label}` : v.label}
                   </option>
@@ -262,6 +285,7 @@ export default function SettingsModal({
                       "I'm starting to like this app.",
                       draft.cloudVoice,
                       draft.ttsModel,
+                      engine,
                     );
                     const audio = new Audio(url);
                     try {
@@ -272,13 +296,13 @@ export default function SettingsModal({
                     }
                   } catch (e) {
                     if (isQuotaError(e)) {
-                      markQuotaHit();
-                      setQuotaLocked(true);
+                      markQuotaHit(engine);
+                      bumpQuota((n) => n + 1);
                     }
                     if (browserTtsSupported() && speakBrowser("I'm starting to like this app.")) {
                       setCloudMsg('한도 초과 — 브라우저 음성으로 재생했어요.');
                     } else {
-                      setCloudMsg('실패: ' + (e instanceof Error ? e.message : String(e)).slice(0, 80));
+                      setCloudMsg('실패: ' + (e instanceof Error ? e.message : String(e)).slice(0, 90));
                     }
                   }
                 }}
@@ -297,10 +321,17 @@ export default function SettingsModal({
                 {cloudMsg}
               </p>
             )}
-            <p className="hint" style={{ margin: '8px 0 0' }}>
-              무료 서버는 <code>worker/README.md</code> 안내대로 Cloudflare에 배포하면 돼요. 아이폰/패드/맥
-              모두 빠르고 자연스러워요.
-            </p>
+            {engine === 'google' ? (
+              <p className="hint" style={{ margin: '8px 0 0' }}>
+                Google Cloud TTS는 <b>매월 100만 자 무료</b>. 워커에 <code>GOOGLE_TTS_KEY</code> 시크릿을
+                넣고 재배포해야 동작해요 (<code>worker/README.md</code> 참고). 주소는 지금 것 그대로 사용.
+              </p>
+            ) : (
+              <p className="hint" style={{ margin: '8px 0 0' }}>
+                무료 서버는 <code>worker/README.md</code> 안내대로 Cloudflare에 배포하면 돼요. 아이폰/패드/맥
+                모두 빠르고 자연스러워요.
+              </p>
+            )}
           </div>
 
         <label className="toggle" style={{ marginBottom: 16 }}>

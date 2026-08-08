@@ -41,6 +41,21 @@ npx wrangler secret put TTS_SECRET
 
 이제 모든 기기에서 즉시·자연스러운 음성이 나옵니다.
 
+## (선택) Google Cloud TTS — 매월 100만 자 무료
+
+Cloudflare 하루 한도가 부족하면 Google Cloud TTS(Neural2, **매월 100만 자 무료·영구**)를 같이 붙일 수 있어요. 같은 워커가 대신 호출하고, 키는 워커 시크릿으로만 보관돼요.
+
+1. **Google Cloud 콘솔** → 프로젝트 만들기 → **Cloud Text-to-Speech API** 사용 설정 (결제 계정 필요하나 무료 한도 내 과금 없음).
+2. **API 및 서비스 → 사용자 인증 정보 → API 키 만들기** → 그 키를 "Cloud Text-to-Speech API"로 제한(권장).
+3. 워커에 키를 시크릿으로 넣고 재배포:
+   ```bash
+   cd worker
+   npx wrangler secret put GOOGLE_TTS_KEY   # 위 API 키 붙여넣기
+   npx wrangler deploy
+   ```
+4. 앱 ⚙ 설정 → **음성 엔진: Google Cloud** 선택 → 음성 고르고 미리듣기.
+
 ## 참고
-- 무료 한도(하루 1만 뉴런) 초과 시 다음날 리셋.
+- Cloudflare 무료 한도(하루 1만 뉴런) 초과 시 다음날 리셋. Google은 매월 100만 자.
+- 한도 초과/실패 시 앱은 자동으로 브라우저 내장 음성으로 대체 재생해요.
 - 주소가 공개되므로 시크릿 설정을 권장(다른 사람이 내 한도를 쓰는 것 방지).

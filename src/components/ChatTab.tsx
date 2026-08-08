@@ -475,10 +475,11 @@ export default function ChatTab({
         text,
         settings.cloudVoice,
         settings.ttsModel,
+        settings.ttsEngine,
       );
       await playBytes(bytes, id);
     } catch (e) {
-      if (isQuotaError(e)) markQuotaHit();
+      if (isQuotaError(e)) markQuotaHit(settings.ttsEngine);
       // 클라우드 실패(한도 429 등) → 브라우저 내장 음성으로 대체
       if (browserTtsSupported() && playBrowser(text, id)) {
         noteFallbackOnce();
@@ -505,10 +506,11 @@ export default function ChatTab({
         ttsText,
         settings.cloudVoice,
         settings.ttsModel,
+        settings.ttsEngine,
       );
     } catch (e) {
       failed = true; // 한도 초과 등 → 브라우저 음성으로 대체
-      if (isQuotaError(e)) markQuotaHit();
+      if (isQuotaError(e)) markQuotaHit(settings.ttsEngine);
     }
     const msg = push(data);
     const id = `${msg.id}:${suffix}`;

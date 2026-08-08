@@ -64,6 +64,7 @@ export const defaultGitHub: GitHubConfig = {
 export const defaultSettings: Settings = {
   apiKey: (import.meta.env.VITE_GEMINI_API_KEY as string | undefined) ?? '',
   model: 'gemini-3.5-flash-lite',
+  ttsEngine: 'cloudflare',
   ttsModel: 'aura-1',
   cloudVoice: 'asteria',
   autoSpeak: true,

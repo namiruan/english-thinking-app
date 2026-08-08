@@ -88,7 +88,8 @@ export interface Settings {
   model?: string; // 대화/사전 모델 (기본 gemini)
   ttsUrl?: string; // 클라우드 TTS Worker 주소
   ttsSecret?: string; // 클라우드 TTS 시크릿 (선택)
-  ttsModel?: string; // 'aura-1' | 'aura-2-en'
+  ttsEngine?: 'cloudflare' | 'google'; // TTS 제공자
+  ttsModel?: string; // Cloudflare: 'aura-1' | 'aura-2-en'
   cloudVoice?: string; // 음성(화자)
   autoSpeak: boolean; // AI 응답 자동 재생
   github?: GitHubConfig; // 앱에서 GitHub에 바로 저장할 때 사용

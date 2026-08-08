@@ -37,6 +37,41 @@ export default {
     const speaker = String(body.speaker || 'asteria');
     if (!text) return new Response('no text', { status: 400, headers: CORS });
 
+    // ── Google Cloud TTS (매월 100만 자 무료) ──
+    if (String(body.provider || '') === 'google') {
+      if (!env.GOOGLE_TTS_KEY) {
+        return new Response('no google key: set GOOGLE_TTS_KEY secret', { status: 500, headers: CORS });
+      }
+      const voice = String(body.voice || 'en-US-Neural2-F');
+      const languageCode = voice.split('-').slice(0, 2).join('-') || 'en-US';
+      const gres = await fetch(
+        'https://texttospeech.googleapis.com/v1/text:synthesize?key=' + env.GOOGLE_TTS_KEY,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            input: { text },
+            voice: { languageCode, name: voice },
+            audioConfig: { audioEncoding: 'MP3' },
+          }),
+        },
+      );
+      if (!gres.ok) {
+        const detail = await gres.text().catch(() => '');
+        return new Response(('google tts ' + gres.status + ': ' + detail).slice(0, 300), {
+          status: gres.status,
+          headers: CORS,
+        });
+      }
+      const j = await gres.json();
+      const b64 = j && j.audioContent;
+      if (!b64) return new Response('google tts: empty audio', { status: 502, headers: CORS });
+      const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+      return new Response(bytes, {
+        headers: { ...CORS, 'Content-Type': 'audio/mpeg', 'Cache-Control': 'no-store' },
+      });
+    }
+
     // 모델 선택 (화이트리스트)
     const MODELS = { 'aura-1': '@cf/deepgram/aura-1', 'aura-2-en': '@cf/deepgram/aura-2-en' };
     const modelId = MODELS[String(body.model || 'aura-1')] || MODELS['aura-1'];

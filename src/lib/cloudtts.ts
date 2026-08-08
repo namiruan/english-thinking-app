@@ -47,18 +47,18 @@ export function isQuotaError(e: unknown): boolean {
   const m = (e instanceof Error ? e.message : String(e)).toLowerCase();
   return m.includes('429') || m.includes('neuron') || m.includes('allocation');
 }
-/** 오늘 한도 소진으로 표시 */
-export function markQuotaHit(): void {
+/** 오늘 한도 소진으로 표시 (엔진별) */
+export function markQuotaHit(engine: TtsEngine = 'cloudflare'): void {
   try {
-    localStorage.setItem(QUOTA_KEY, utcDay());
+    localStorage.setItem(QUOTA_KEY, `${utcDay()}|${engine}`);
   } catch {
     /* ignore */
   }
 }
-/** 오늘(UTC) 한도가 잠겨있는지 */
-export function isQuotaLocked(): boolean {
+/** 오늘(UTC) 해당 엔진 한도가 잠겨있는지 */
+export function isQuotaLocked(engine: TtsEngine = 'cloudflare'): boolean {
   try {
-    return localStorage.getItem(QUOTA_KEY) === utcDay();
+    return localStorage.getItem(QUOTA_KEY) === `${utcDay()}|${engine}`;
   } catch {
     return false;
   }
@@ -76,6 +76,34 @@ export const CLOUD_MODELS = [
   { id: 'aura-2-en', label: 'Aura-2 · 더 표현력 좋음 (최신)' },
 ];
 
+// ── 엔진 & Google Cloud TTS 음성 ──────────────────────────
+export type TtsEngine = 'cloudflare' | 'google';
+export const TTS_ENGINES: { id: TtsEngine; label: string }[] = [
+  { id: 'cloudflare', label: 'Cloudflare · 하루 1만 (기본)' },
+  { id: 'google', label: 'Google Cloud · 매월 100만 자 무료' },
+];
+
+// Google Cloud TTS Neural2 음성 (매월 100만 자 무료 티어)
+export const GOOGLE_VOICES: CloudVoice[] = [
+  { id: 'en-US-Neural2-F', label: 'US 여성 F (추천)' },
+  { id: 'en-US-Neural2-C', label: 'US 여성 C' },
+  { id: 'en-US-Neural2-E', label: 'US 여성 E' },
+  { id: 'en-US-Neural2-H', label: 'US 여성 H' },
+  { id: 'en-US-Neural2-A', label: 'US 남성 A' },
+  { id: 'en-US-Neural2-D', label: 'US 남성 D' },
+  { id: 'en-US-Neural2-I', label: 'US 남성 I' },
+  { id: 'en-US-Neural2-J', label: 'US 남성 J' },
+  { id: 'en-GB-Neural2-A', label: 'UK 여성 A' },
+  { id: 'en-GB-Neural2-B', label: 'UK 남성 B' },
+];
+
+export function voicesForEngine(engine?: TtsEngine, model?: string): CloudVoice[] {
+  return engine === 'google' ? GOOGLE_VOICES : voicesForModel(model);
+}
+export function defaultVoiceForEngine(engine?: TtsEngine, model?: string): string {
+  return engine === 'google' ? 'en-US-Neural2-F' : defaultVoiceForModel(model);
+}
+
 /** 오디오 바이트를 받아온다. 오디오가 아니거나 비어있으면(한도/서버오류 등) 명확한 에러. */
 async function fetchTtsBytes(
   url: string,
@@ -83,15 +111,20 @@ async function fetchTtsBytes(
   text: string,
   speaker: string,
   model: string,
+  engine: TtsEngine = 'cloudflare',
 ): Promise<ArrayBuffer> {
   if (!url) throw new Error('NO_TTS_URL');
+  const payload =
+    engine === 'google'
+      ? { provider: 'google', text, voice: speaker }
+      : { provider: 'cloudflare', text, speaker, model };
   const res = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       ...(secret ? { 'X-Secret': secret } : {}),
     },
-    body: JSON.stringify({ text, speaker, model }),
+    body: JSON.stringify(payload),
   });
   const ct = res.headers.get('content-type') || '';
   if (!res.ok) {
@@ -121,8 +154,9 @@ export async function synthCloud(
   text: string,
   speaker = 'asteria',
   model = 'aura-1',
+  engine: TtsEngine = 'cloudflare',
 ): Promise<string> {
-  const buf = await fetchTtsBytes(url, secret, text, speaker, model);
+  const buf = await fetchTtsBytes(url, secret, text, speaker, model, engine);
   return URL.createObjectURL(new Blob([buf], { type: 'audio/mpeg' }));
 }
 
@@ -133,6 +167,7 @@ export async function synthCloudBuffer(
   text: string,
   speaker = 'asteria',
   model = 'aura-1',
+  engine: TtsEngine = 'cloudflare',
 ): Promise<ArrayBuffer> {
-  return await fetchTtsBytes(url, secret, text, speaker, model);
+  return await fetchTtsBytes(url, secret, text, speaker, model, engine);
 }
