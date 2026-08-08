@@ -129,7 +129,7 @@ async function fetchTtsBytes(
   const ct = res.headers.get('content-type') || '';
   if (!res.ok) {
     const detail = await res.text().catch(() => '');
-    throw new Error(`TTS ${res.status}: ${detail}`.slice(0, 200));
+    throw new Error(`TTS ${res.status}: ${detail}`.slice(0, 320));
   }
   const buf = await res.arrayBuffer();
   // 서버가 200이지만 오디오가 아닌 경우(빈 응답/에러 JSON/한도 초과 메시지 등) 감지

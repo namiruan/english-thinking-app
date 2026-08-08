@@ -295,7 +295,7 @@ export default function SettingsModal({
                       setCloudMsg('브라우저가 재생을 막았어요. 한 번 더 눌러주세요.');
                     }
                   } catch (e) {
-                    const emsg = (e instanceof Error ? e.message : String(e)).slice(0, 120);
+                    const emsg = (e instanceof Error ? e.message : String(e)).slice(0, 260);
                     if (isQuotaError(e)) {
                       markQuotaHit(engine);
                       bumpQuota((n) => n + 1);
