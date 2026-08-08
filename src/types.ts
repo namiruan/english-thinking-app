@@ -64,7 +64,7 @@ export interface HistoryEntry {
 
 export interface WordEntry {
   term: string; // 단어/숙어
-  english: string; // 영어 풀이
+  english: string; // 영어 풀이 (맥락을 담은 쉬운 정의)
   korean: string; // 한국어 뜻
   count: number; // 저장/노출 횟수
   date: string; // 마지막 ISO

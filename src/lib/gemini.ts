@@ -283,7 +283,7 @@ export async function lookupTerm(
 ): Promise<LookupResult> {
   const ai = client(apiKey);
   const prompt = context
-    ? `Define the English term "${term}" AS IT IS USED in the following passage. Return the specific sense/meaning that fits THIS usage, not the most common or unrelated meaning.\n\nPassage:\n${context}`
+    ? `Define the English term "${term}" AS IT IS USED in the following passage. Rewrite what the passage says about this term into a simpler, easier definition — keep ALL the meaning and usage the passage conveys, just in easier words. Do NOT fall back to the most common or unrelated meaning.\n\nPassage:\n${context}`
     : `Define: "${term}"`;
   const res = await withRetry(() =>
     ai.models.generateContent({
@@ -292,9 +292,9 @@ export async function lookupTerm(
       config: {
         systemInstruction: `You are a friendly bilingual (English-Korean) dictionary for beginners. For the given English word or phrase/idiom, return JSON:
 - "partOfSpeech": short type label (e.g. "verb", "noun", "idiom", "phrasal verb") or "".
-- "english": a VERY SIMPLE English definition that a 5-year-old kindergartner could understand. Use only the most basic, common words. One short sentence. NO hard or academic vocabulary. If a simpler everyday word exists, use it.
-- "korean": a natural, short Korean meaning.
-If a passage/context is given, choose the meaning that matches how the term is used THERE — even if it is not the most common meaning. If it's an idiom or multi-word phrase, explain the whole expression in simple words, not individual words. Keep it short and easy.`,
+- "english": an EASY English definition using simple, everyday words a beginner can understand. Avoid hard or academic vocabulary. IF A PASSAGE/CONTEXT IS GIVEN: your definition MUST preserve the SAME meaning and usage that the passage conveys — including the key nuance (how, where, or when the word is used) — only expressed more simply. Do NOT reduce it to a generic or unrelated sense, and do NOT drop the context's nuance. Use one or two short, plain sentences (enough to keep the full meaning; do not over-shorten).
+- "korean": a natural, short Korean meaning that matches this same sense.
+If it's an idiom or multi-word phrase, explain the whole expression in simple words, not individual words.`,
         responseMimeType: 'application/json',
         responseSchema: lookupSchema,
         temperature: 0.3,
