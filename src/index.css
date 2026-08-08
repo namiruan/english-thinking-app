@@ -675,10 +675,9 @@ textarea.input:focus {
   border: none;
   background: transparent;
   color: var(--muted);
-  font-size: 12px;
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
   flex: none;
   display: grid;
   place-items: center;
@@ -686,6 +685,12 @@ textarea.input:focus {
 .cat-collapse:hover {
   background: var(--surface-2);
   color: var(--text);
+}
+.cat-collapse svg {
+  transition: transform 0.18s ease;
+}
+.cat-collapse.collapsed svg {
+  transform: rotate(-90deg);
 }
 .cat-head .cat-name {
   font-weight: 620;

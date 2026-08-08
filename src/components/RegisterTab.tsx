@@ -27,6 +27,7 @@ export default function RegisterTab({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [importName, setImportName] = useState('');
+  const [importTargetId, setImportTargetId] = useState<string>('__new__');
   const [importText, setImportText] = useState('');
   const [importMsg, setImportMsg] = useState('');
   const [importBusy, setImportBusy] = useState(false);
@@ -99,9 +100,23 @@ export default function RegisterTab({
       setImportMsg('가져올 문장이 없어요. "" 안에 배울 구문이 있는지 확인해 주세요.');
       return;
     }
-    const cat: Category = { id: newId(), name: importName.trim() || '가져온 문장', phrases };
-    setCategories((prev) => [...prev, cat]);
-    setActiveCatId(cat.id);
+    // 기존 카테고리에 추가할지, 새로 만들지
+    let targetId: string;
+    let targetName: string;
+    const existing = categories.find((c) => c.id === importTargetId);
+    if (importTargetId !== '__new__' && existing) {
+      targetId = existing.id;
+      targetName = existing.name;
+      setCategories((prev) =>
+        prev.map((c) => (c.id === targetId ? { ...c, phrases: [...c.phrases, ...phrases] } : c)),
+      );
+    } else {
+      const cat: Category = { id: newId(), name: importName.trim() || '가져온 문장', phrases };
+      targetId = cat.id;
+      targetName = cat.name;
+      setCategories((prev) => [...prev, cat]);
+    }
+    setActiveCatId(targetId);
     setImportText('');
     setImportName('');
 
@@ -114,7 +129,7 @@ export default function RegisterTab({
           const r = await lookupTerm(apiKey, p.text, model);
           setCategories((prev) =>
             prev.map((c) =>
-              c.id === cat.id
+              c.id === targetId
                 ? { ...c, phrases: c.phrases.map((x) => (x.id === p.id ? { ...x, meaning: r.korean } : x)) }
                 : c,
             ),
@@ -125,7 +140,7 @@ export default function RegisterTab({
       }
       setImportBusy(false);
     }
-    setImportMsg(`✓ ${phrases.length}개 항목을 "${cat.name}" 카테고리로 등록했어요.`);
+    setImportMsg(`✓ ${phrases.length}개 항목을 "${targetName}"에 등록했어요.`);
   };
 
   const addPhrase = (catId: string) => {
@@ -230,13 +245,28 @@ export default function RegisterTab({
           "Think in English" 설명문을 그대로 붙여넣으세요. <b>"" 안의 표현 = 배울 구문</b>, 문단
           전체 = 영어 풀이로 저장돼요. 뜻은 AI가 자동으로 채워줍니다. 여러 개면 <b>빈 줄</b>로 구분.
         </p>
-        <input
-          className="input"
-          placeholder="카테고리 이름 (예: 티처조 영어식 사고 100)"
-          value={importName}
-          onChange={(e) => setImportName(e.target.value)}
+        <select
+          className="select"
+          value={importTargetId}
+          onChange={(e) => setImportTargetId(e.target.value)}
           style={{ marginBottom: 8 }}
-        />
+        >
+          {categories.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name} 에 추가
+            </option>
+          ))}
+          <option value="__new__">+ 새 카테고리 만들기</option>
+        </select>
+        {importTargetId === '__new__' && (
+          <input
+            className="input"
+            placeholder="새 카테고리 이름 (예: 티처조 영어식 사고 100)"
+            value={importName}
+            onChange={(e) => setImportName(e.target.value)}
+            style={{ marginBottom: 8 }}
+          />
+        )}
         <textarea
           className="input"
           rows={7}
@@ -267,12 +297,24 @@ export default function RegisterTab({
         <div className="card" key={cat.id} style={{ marginBottom: 16 }}>
           <div className="cat-head">
             <button
-              className="cat-collapse"
+              className={`cat-collapse ${collapsed[cat.id] ? 'collapsed' : ''}`}
               onClick={() => toggleCollapse(cat.id)}
               aria-label={collapsed[cat.id] ? '펼치기' : '접기'}
+              aria-expanded={!collapsed[cat.id]}
               title={collapsed[cat.id] ? '펼치기' : '접기'}
             >
-              {collapsed[cat.id] ? '▸' : '▾'}
+              <svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M6 9l6 6 6-6" />
+              </svg>
             </button>
             <div style={{ flex: 1, minWidth: 0 }}>
               <input
