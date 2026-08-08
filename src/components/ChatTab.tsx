@@ -349,25 +349,21 @@ export default function ChatTab({
   ) => {
     if (!settings.autoSpeak || !ttsText) return push(data);
 
-    // 브라우저 음성: 로컬이라 지연 없음 → 바로 노출하고 재생
+    // 브라우저 음성: 로컬에서 즉시 시작 → 바로 노출하고 재생 (동시)
     if (voiceEngine === 'browser') {
       const msg = push(data);
       speak(ttsText, `${msg.id}:${suffix}`);
       return msg;
     }
 
-    // Kokoro: 최초 로딩이 느릴 수 있어 텍스트 먼저 노출 후 준비되면 재생
-    if (voiceEngine === 'kokoro') {
-      const msg = push(data);
-      speak(ttsText, `${msg.id}:${suffix}`);
-      return msg;
-    }
-
-    // Gemini 음성: 먼저 합성해 텍스트와 동시에 노출·재생
-    if (!settings.apiKey) return push(data);
+    // Kokoro / Gemini: 음성을 먼저 합성한 뒤 텍스트와 "동시에" 노출·재생
     let url: string | null = null;
     try {
-      url = await synthesizeSpeech(settings.apiKey, ttsText, settings.voice);
+      if (voiceEngine === 'kokoro') {
+        url = await synthKokoro(ttsText, settings.kokoroVoice);
+      } else if (settings.apiKey) {
+        url = await synthesizeSpeech(settings.apiKey, ttsText, settings.voice);
+      }
     } catch {
       /* 합성 실패 시 텍스트만 노출 */
     }
