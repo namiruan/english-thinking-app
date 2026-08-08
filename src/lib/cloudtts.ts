@@ -50,13 +50,14 @@ export const CLOUD_MODELS = [
   { id: 'aura-2-en', label: 'Aura-2 · 더 표현력 좋음 (최신)' },
 ];
 
-async function fetchTts(
+/** 오디오 바이트를 받아온다. 오디오가 아니거나 비어있으면(한도/서버오류 등) 명확한 에러. */
+async function fetchTtsBytes(
   url: string,
   secret: string,
   text: string,
   speaker: string,
   model: string,
-): Promise<Response> {
+): Promise<ArrayBuffer> {
   if (!url) throw new Error('NO_TTS_URL');
   const res = await fetch(url, {
     method: 'POST',
@@ -66,11 +67,25 @@ async function fetchTts(
     },
     body: JSON.stringify({ text, speaker, model }),
   });
+  const ct = res.headers.get('content-type') || '';
   if (!res.ok) {
     const detail = await res.text().catch(() => '');
     throw new Error(`TTS ${res.status}: ${detail}`.slice(0, 200));
   }
-  return res;
+  const buf = await res.arrayBuffer();
+  // 서버가 200이지만 오디오가 아닌 경우(빈 응답/에러 JSON/한도 초과 메시지 등) 감지
+  const looksAudio = /audio|mpeg|mp3|octet-stream/i.test(ct);
+  if (buf.byteLength < 512 || (ct && !looksAudio)) {
+    let body = '';
+    try {
+      body = new TextDecoder().decode(buf).trim();
+    } catch {
+      /* ignore */
+    }
+    const hint = body ? `: ${body.slice(0, 140)}` : ` (${buf.byteLength}바이트${ct ? `, ${ct}` : ''})`;
+    throw new Error(`음성 서버가 오디오를 반환하지 않았어요${hint}`);
+  }
+  return buf;
 }
 
 /** 재생용 blob URL (레거시/폴백) */
@@ -81,8 +96,8 @@ export async function synthCloud(
   speaker = 'asteria',
   model = 'aura-1',
 ): Promise<string> {
-  const res = await fetchTts(url, secret, text, speaker, model);
-  return URL.createObjectURL(await res.blob());
+  const buf = await fetchTtsBytes(url, secret, text, speaker, model);
+  return URL.createObjectURL(new Blob([buf], { type: 'audio/mpeg' }));
 }
 
 /** Web Audio 재생용 원시 오디오 바이트 (자동재생 정책에 강함) */
@@ -93,6 +108,5 @@ export async function synthCloudBuffer(
   speaker = 'asteria',
   model = 'aura-1',
 ): Promise<ArrayBuffer> {
-  const res = await fetchTts(url, secret, text, speaker, model);
-  return await res.arrayBuffer();
+  return await fetchTtsBytes(url, secret, text, speaker, model);
 }

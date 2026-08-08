@@ -333,24 +333,37 @@ export default function ChatTab({
     }
   };
 
-  // 사용자 제스처에서 오디오 잠금해제 (AudioContext resume + <audio> 폴백 프라임)
+  // 사용자 제스처에서 오디오 잠금해제
   const unlockAudio = () => {
     const ctx = getCtx();
-    if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => {});
-    if (!audioPrimedRef.current) {
+    if (ctx) {
+      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+      // iOS: 제스처 안에서 무음 버퍼를 1회 재생해야 완전히 해제됨 (resume만으론 부족)
       try {
-        const a = ensureAudio();
+        const b = ctx.createBuffer(1, 1, 22050);
+        const s = ctx.createBufferSource();
+        s.buffer = b;
+        s.connect(ctx.destination);
+        s.start(0);
+        audioPrimedRef.current = true;
+      } catch {
+        /* ignore */
+      }
+    }
+    // <audio> 폴백 요소도 best-effort 프라임
+    try {
+      const a = ensureAudio();
+      if (a.paused) {
         a.src = SILENT_WAV;
         a.play()
           .then(() => {
             a.pause();
             a.currentTime = 0;
-            audioPrimedRef.current = true;
           })
           .catch(() => {});
-      } catch {
-        /* ignore */
       }
+    } catch {
+      /* ignore */
     }
   };
 

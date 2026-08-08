@@ -44,6 +44,17 @@ export default {
 
     try {
       const resp = await env.AI.run(modelId, { text, speaker }, { returnRawResponse: true });
+      // returnRawResponse는 한도 초과/오류 시에도 throw 없이 에러 응답을 그대로 줄 수 있음.
+      // 오디오가 아니면 진짜 상태코드/내용을 클라이언트로 전달한다 (예: 429 한도).
+      const ct = resp.headers.get('content-type') || '';
+      if (!resp.ok || !/audio|mpeg|mp3|octet-stream/i.test(ct)) {
+        const detail = await resp.text().catch(() => '');
+        const status = resp.status && resp.status >= 400 ? resp.status : 502;
+        return new Response(('tts upstream ' + resp.status + ': ' + (detail || ct)).slice(0, 300), {
+          status,
+          headers: CORS,
+        });
+      }
       return new Response(resp.body, {
         headers: { ...CORS, 'Content-Type': 'audio/mpeg', 'Cache-Control': 'no-store' },
       });

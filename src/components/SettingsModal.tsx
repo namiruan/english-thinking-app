@@ -255,8 +255,13 @@ export default function SettingsModal({
                       draft.cloudVoice,
                       draft.ttsModel,
                     );
-                    new Audio(url).play();
-                    setCloudMsg('✓ 연결 성공');
+                    const audio = new Audio(url);
+                    try {
+                      await audio.play();
+                      setCloudMsg('✓ 재생됐어요');
+                    } catch {
+                      setCloudMsg('음성은 정상적으로 받았지만 브라우저가 재생을 막았어요. 버튼을 한 번 더 눌러보세요.');
+                    }
                   } catch (e) {
                     setCloudMsg('실패: ' + (e instanceof Error ? e.message : String(e)));
                   }
