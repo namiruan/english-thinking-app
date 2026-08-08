@@ -11,6 +11,7 @@ import type {
 } from '../types';
 import { newId } from '../store';
 import { focusTurn, freeTurn, friendlyError, synthesizeSpeech, type Turn } from '../lib/gemini';
+import { synthKokoro } from '../lib/kokoro';
 import {
   cancelBrowserSpeech,
   isSpeechRecognitionSupported,
@@ -317,6 +318,18 @@ export default function ChatTab({
       });
       return;
     }
+    // Kokoro: 브라우저 내장 신경망 TTS (로컬, 무료)
+    if (voiceEngine === 'kokoro') {
+      setSpeakingId(id);
+      try {
+        const url = await synthKokoro(text, settings.kokoroVoice);
+        playUrl(url, id);
+      } catch (e) {
+        setSpeakingId(null);
+        push({ role: 'model', text: `🔊 Kokoro 음성 실패: ${friendlyError(e)} (설정에서 음성 엔진을 바꿔보세요)` });
+      }
+      return;
+    }
     if (!settings.apiKey) return;
     setSpeakingId(id);
     try {
@@ -338,6 +351,13 @@ export default function ChatTab({
 
     // 브라우저 음성: 로컬이라 지연 없음 → 바로 노출하고 재생
     if (voiceEngine === 'browser') {
+      const msg = push(data);
+      speak(ttsText, `${msg.id}:${suffix}`);
+      return msg;
+    }
+
+    // Kokoro: 최초 로딩이 느릴 수 있어 텍스트 먼저 노출 후 준비되면 재생
+    if (voiceEngine === 'kokoro') {
       const msg = push(data);
       speak(ttsText, `${msg.id}:${suffix}`);
       return msg;

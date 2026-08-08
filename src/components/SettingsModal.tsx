@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { Category, GitHubConfig, Settings } from '../types';
 import { TTS_VOICES, CHAT_MODELS } from '../lib/gemini';
 import { listEnglishVoices, onVoicesChanged, speakBrowser } from '../lib/speech';
+import { KOKORO_VOICES, loadKokoro } from '../lib/kokoro';
 import { encryptSecret, type EncryptedBlob } from '../lib/crypto';
 import { buildVaultJson } from '../lib/vault';
 import { commitFile } from '../lib/github';
@@ -45,6 +46,21 @@ export default function SettingsModal({
     setBrowserVoices(listEnglishVoices());
     return onVoicesChanged(() => setBrowserVoices(listEnglishVoices()));
   }, []);
+
+  const [kokoroPct, setKokoroPct] = useState<number | null>(null);
+  const [kokoroMsg, setKokoroMsg] = useState('');
+  const prepKokoro = async () => {
+    setKokoroMsg('');
+    setKokoroPct(0);
+    try {
+      await loadKokoro((p) => setKokoroPct(p));
+      setKokoroPct(100);
+      setKokoroMsg('✓ 음성 모델 준비 완료!');
+    } catch (e) {
+      setKokoroPct(null);
+      setKokoroMsg('로드 실패: ' + (e instanceof Error ? e.message : String(e)));
+    }
+  };
 
   // vault 생성용
   const [expKey, setExpKey] = useState(settings.apiKey || '');
@@ -197,8 +213,46 @@ export default function SettingsModal({
           >
             <option value="gemini">Gemini 원어민 음성 (고품질 · 한도 사용)</option>
             <option value="browser">브라우저 음성 (무료 · 무제한)</option>
+            <option value="kokoro">Kokoro 신경망 음성 (무료 · 무제한 · 자연스러움)</option>
           </select>
         </div>
+
+        {draft.voiceEngine === 'kokoro' && (
+          <div className="field">
+            <label>Kokoro 음성</label>
+            <select
+              className="select"
+              value={draft.kokoroVoice ?? 'af_heart'}
+              onChange={(e) => setDraft({ ...draft, kokoroVoice: e.target.value })}
+            >
+              {KOKORO_VOICES.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.label}
+                </option>
+              ))}
+            </select>
+            <div className="row" style={{ marginTop: 8 }}>
+              <button className="btn" type="button" onClick={prepKokoro} disabled={kokoroPct !== null && kokoroPct < 100}>
+                {kokoroPct !== null && kokoroPct < 100 ? (
+                  <>
+                    <span className="spinner" /> {kokoroPct}%
+                  </>
+                ) : (
+                  '⬇ 음성 모델 준비'
+                )}
+              </button>
+              {kokoroMsg && (
+                <span className="hint" style={{ color: kokoroMsg.startsWith('✓') ? 'var(--good)' : 'var(--danger)' }}>
+                  {kokoroMsg}
+                </span>
+              )}
+            </div>
+            <p className="hint" style={{ margin: '8px 0 0' }}>
+              최초 1회 <b>~86MB 다운로드</b> 후 브라우저에 저장돼요. 그 다음부턴 오프라인·무제한.
+              Chrome/Edge 권장.
+            </p>
+          </div>
+        )}
 
         {(draft.voiceEngine ?? 'gemini') === 'gemini' && (
           <div className="field">
