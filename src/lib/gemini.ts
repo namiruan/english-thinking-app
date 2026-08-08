@@ -2,13 +2,14 @@ import { GoogleGenAI, Type } from '@google/genai';
 import type { Phrase } from '../types';
 import { base64ToBytes, parseSampleRate, pcmToWavBlob } from './audio';
 
-const CHAT_MODEL = 'gemini-2.5-flash-lite';
+const CHAT_MODEL = 'gemini-3.5-flash-lite';
 const TTS_MODEL = 'gemini-2.5-flash-preview-tts';
 
-// 설정에서 고를 수 있는 대화/사전 모델
+// 설정에서 고를 수 있는 대화/사전 모델 (2026 기준)
 export const CHAT_MODELS = [
-  { id: 'gemini-2.5-flash-lite', label: 'Flash-Lite · 한도 여유·빠름 (권장)' },
-  { id: 'gemini-2.5-flash', label: 'Flash · 고품질' },
+  { id: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash-Lite · 빠름·한도 여유 (권장)' },
+  { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash · 고품질' },
+  { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash · 대체용' },
 ];
 
 function client(apiKey: string) {
@@ -364,6 +365,8 @@ export function friendlyError(e: unknown): string {
     return 'API 키가 유효하지 않아요. 설정에서 키를 다시 확인해주세요.';
   if (/\b(503|500)\b|UNAVAILABLE|overloaded|high demand|internal error/i.test(msg))
     return 'Gemini 서버에 요청이 몰려 일시적으로 응답하지 못했어요. 잠시 후 다시 시도해주세요.';
+  if (/\b404\b|NOT_FOUND|no longer available|is not found|not supported/i.test(msg))
+    return '이 모델을 쓸 수 없어요. 설정 → "대화·사전 모델"에서 다른 모델을 고르거나 계정에서 지원하는 모델 ID를 직접 입력해주세요.';
   return `오류가 발생했어요: ${msg}`;
 }
 

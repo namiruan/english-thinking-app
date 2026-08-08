@@ -180,7 +180,7 @@ export default function App() {
       {/* 드래그 사전 조회 팝업 */}
       <SelectionLookup
         apiKey={effectiveKey}
-        model={effectiveSettings.model || 'gemini-2.5-flash-lite'}
+        model={effectiveSettings.model?.trim() || 'gemini-3.5-flash-lite'}
         onAdd={addWord}
       />
 

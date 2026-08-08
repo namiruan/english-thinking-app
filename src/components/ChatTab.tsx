@@ -246,7 +246,7 @@ export default function ChatTab({
 
   const phrases = category?.phrases ?? [];
   const phrase: Phrase | undefined = phrases[phraseIdx];
-  const model = settings.model || 'gemini-2.5-flash-lite';
+  const model = settings.model?.trim() || 'gemini-3.5-flash-lite';
   const voiceEngine = settings.voiceEngine ?? 'gemini';
 
   const resetSession = () => {

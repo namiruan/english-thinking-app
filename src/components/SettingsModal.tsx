@@ -134,19 +134,48 @@ export default function SettingsModal({
 
         <div className="field">
           <label>대화·사전 모델</label>
-          <select
-            className="select"
-            value={draft.model ?? 'gemini-2.5-flash-lite'}
-            onChange={(e) => setDraft({ ...draft, model: e.target.value })}
-          >
-            {CHAT_MODELS.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.label}
-              </option>
-            ))}
-          </select>
+          {(() => {
+            const cur = draft.model || 'gemini-3.5-flash-lite';
+            const isPreset = CHAT_MODELS.some((m) => m.id === cur);
+            return (
+              <>
+                <select
+                  className="select"
+                  value={isPreset ? cur : '__custom__'}
+                  onChange={(e) =>
+                    setDraft({
+                      ...draft,
+                      model: e.target.value === '__custom__' ? ' ' : e.target.value,
+                    })
+                  }
+                >
+                  {CHAT_MODELS.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.label}
+                    </option>
+                  ))}
+                  <option value="__custom__">직접 입력…</option>
+                </select>
+                {!isPreset && (
+                  <input
+                    className="input"
+                    style={{ marginTop: 8 }}
+                    placeholder="모델 ID 직접 입력 (예: gemini-3.6-flash)"
+                    value={(draft.model ?? '').trim()}
+                    onChange={(e) => setDraft({ ...draft, model: e.target.value.trim() })}
+                    autoFocus
+                  />
+                )}
+              </>
+            );
+          })()}
           <p className="hint" style={{ margin: '6px 0 0' }}>
-            한도(429)가 자주 뜨면 <b>Flash-Lite</b>를 쓰세요. 한도 버킷이 따로라 여유가 큽니다.
+            "모델을 쓸 수 없다"(404)거나 한도(429)가 자주 뜨면 다른 모델로 바꾸세요. 계정에서 지원하는
+            정확한 ID는{' '}
+            <a href="https://aistudio.google.com/rate-limit" target="_blank" rel="noreferrer">
+              대시보드
+            </a>
+            에서 확인.
           </p>
         </div>
 
