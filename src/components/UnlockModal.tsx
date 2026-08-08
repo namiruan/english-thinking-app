@@ -1,16 +1,16 @@
 import { useState } from 'react';
 import type { EncryptedBlob } from '../lib/crypto';
 import { decryptSecret } from '../lib/crypto';
+import type { Category } from '../types';
 
 interface Props {
-  secret: EncryptedBlob;
-  onUnlock: (apiKey: string, remember: boolean) => void;
-  onSkip: () => void;
+  secret?: EncryptedBlob;
+  phrasesEnc?: EncryptedBlob;
+  onUnlock: (apiKey: string | null, categories: Category[] | null) => void;
 }
 
-export default function UnlockModal({ secret, onUnlock, onSkip }: Props) {
+export default function UnlockModal({ secret, phrasesEnc, onUnlock }: Props) {
   const [pw, setPw] = useState('');
-  const [remember, setRemember] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -19,8 +19,11 @@ export default function UnlockModal({ secret, onUnlock, onSkip }: Props) {
     setBusy(true);
     setError('');
     try {
-      const key = await decryptSecret(secret, pw);
-      onUnlock(key, remember);
+      let apiKey: string | null = null;
+      let categories: Category[] | null = null;
+      if (secret) apiKey = await decryptSecret(secret, pw);
+      if (phrasesEnc) categories = JSON.parse(await decryptSecret(phrasesEnc, pw)) as Category[];
+      onUnlock(apiKey, categories);
     } catch {
       setError('비밀번호가 올바르지 않아요.');
       setBusy(false);
@@ -31,9 +34,7 @@ export default function UnlockModal({ secret, onUnlock, onSkip }: Props) {
     <div className="overlay">
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <h3>🔒 잠금 해제</h3>
-        <p className="hint">
-          이 앱에는 암호화된 API 키가 저장돼 있어요. 비밀번호를 입력하면 대화를 시작할 수 있어요.
-        </p>
+        <p className="hint">이 앱은 비밀번호로 잠겨 있어요. 비밀번호를 입력하면 시작할 수 있어요.</p>
 
         <div className="field">
           <label>비밀번호</label>
@@ -53,15 +54,7 @@ export default function UnlockModal({ secret, onUnlock, onSkip }: Props) {
           )}
         </div>
 
-        <label className="toggle" style={{ marginBottom: 20 }}>
-          <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
-          이 브라우저에서 잠금 해제 상태 유지
-        </label>
-
-        <div className="row between">
-          <button className="btn ghost" onClick={onSkip}>
-            비밀번호 없이 계속
-          </button>
+        <div className="row" style={{ justifyContent: 'flex-end' }}>
           <button className="btn primary" onClick={submit} disabled={!pw || busy}>
             {busy ? <span className="spinner" /> : '잠금 해제'}
           </button>

@@ -47,7 +47,7 @@ export default function App() {
   const [vault, setVault] = useState<Vault | null>(null);
   const [booted, setBooted] = useState(false);
   const [sessionKey, setSessionKey] = useState<string | null>(null);
-  const [skipUnlock, setSkipUnlock] = useState(false);
+  const [unlocked, setUnlocked] = useState(false);
 
   // 부팅: vault 로드 + 최초 구문 시드
   useEffect(() => {
@@ -56,7 +56,8 @@ export default function App() {
       const v = await loadVault();
       if (!alive) return;
       setVault(v);
-      if (!localStorage.getItem('et.initialized')) {
+      // 암호화된 구문(phrasesEnc)이면 잠금 해제 후 채워짐 → 여기선 시드 안 함
+      if (!v?.phrasesEnc && !localStorage.getItem('et.initialized')) {
         const phrases = v?.phrases?.length ? v.phrases : seedCategories;
         setCategories(phrases);
         setActiveCatId(phrases[0]?.id ?? '');
@@ -70,25 +71,29 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const effectiveKey = settings.apiKey || sessionKey || '';
+  const effectiveKey = sessionKey || settings.apiKey || '';
   const effectiveSettings: Settings = useMemo(
     () => ({ ...settings, apiKey: effectiveKey }),
     [settings, effectiveKey],
   );
 
-  const needUnlock = booted && !!vault?.secret && !effectiveKey && !skipUnlock;
+  // 비번 강제: vault에 암호화 자료가 있으면 잠금 해제 전까지 앱을 막음
+  const locked = booted && !!(vault?.secret || vault?.phrasesEnc) && !unlocked;
 
   const activeCat = categories.find((c) => c.id === activeCatId) ?? categories[0];
 
-  const handleUnlock = (key: string, remember: boolean) => {
-    if (remember) setSettings((s) => ({ ...s, apiKey: key }));
-    else setSessionKey(key);
+  const handleUnlock = (key: string | null, cats: Category[] | null) => {
+    if (key) setSessionKey(key);
+    if (cats && cats.length) {
+      setCategories(cats);
+      setActiveCatId(cats[0]?.id ?? '');
+    }
+    setUnlocked(true);
   };
 
   const clearKey = () => {
     setSettings((s) => ({ ...s, apiKey: '' }));
     setSessionKey(null);
-    setSkipUnlock(false);
     setShowSettings(false);
   };
 
@@ -107,82 +112,84 @@ export default function App() {
         </button>
       </header>
 
-      <nav className="tabs">
-        <button className={`tab ${tab === 'register' ? 'active' : ''}`} onClick={() => setTab('register')}>
-          표현 등록
-        </button>
-        <button className={`tab ${tab === 'chat' ? 'active' : ''}`} onClick={() => setTab('chat')}>
-          대화
-        </button>
-        <button className={`tab ${tab === 'history' ? 'active' : ''}`} onClick={() => setTab('history')}>
-          기록
-        </button>
-        <button className={`tab ${tab === 'wordbook' ? 'active' : ''}`} onClick={() => setTab('wordbook')}>
-          단어장
-        </button>
-      </nav>
-
-      {tab === 'register' && (
-        <RegisterTab
-          categories={categories}
-          setCategories={setCategories}
-          activeCatId={activeCat?.id ?? ''}
-          setActiveCatId={setActiveCatId}
-        />
-      )}
-
-      {/* 대화 탭은 언마운트하지 않고 숨김 → 탭 전환해도 세션 유지 */}
-      <div style={{ display: tab === 'chat' ? undefined : 'none' }}>
-        <ChatTab
-          category={activeCat}
-          settings={effectiveSettings}
-          recordFocusTurn={recordFocusTurn}
-          recordFreeTurn={recordFreeTurn}
-          addGrammar={addGrammar}
-          studyWords={studyWords}
-          openSettings={() => setShowSettings(true)}
-        />
-      </div>
-
-      {tab === 'history' && (
-        <HistoryTab
-          progress={progress}
-          clearProgress={clearProgress}
-          grammarStats={grammarStats}
-          clearGrammar={clearGrammar}
-        />
-      )}
-
-      {tab === 'wordbook' && (
-        <WordbookTab words={words} removeWord={removeWord} clearWords={clearWords} />
-      )}
-
-      {showSettings && (
-        <SettingsModal
-          settings={effectiveSettings}
-          categories={categories}
-          vaultSecret={vault?.secret}
-          hasKey={!!effectiveKey}
-          onSave={setSettings}
-          onClearKey={clearKey}
-          onClose={() => setShowSettings(false)}
-        />
-      )}
-
-      {needUnlock && vault?.secret && (
+      {locked ? (
         <UnlockModal
-          secret={vault.secret}
+          secret={vault?.secret}
+          phrasesEnc={vault?.phrasesEnc}
           onUnlock={handleUnlock}
-          onSkip={() => setSkipUnlock(true)}
         />
-      )}
+      ) : (
+        <>
+          <nav className="tabs">
+            <button className={`tab ${tab === 'register' ? 'active' : ''}`} onClick={() => setTab('register')}>
+              표현 등록
+            </button>
+            <button className={`tab ${tab === 'chat' ? 'active' : ''}`} onClick={() => setTab('chat')}>
+              대화
+            </button>
+            <button className={`tab ${tab === 'history' ? 'active' : ''}`} onClick={() => setTab('history')}>
+              기록
+            </button>
+            <button className={`tab ${tab === 'wordbook' ? 'active' : ''}`} onClick={() => setTab('wordbook')}>
+              단어장
+            </button>
+          </nav>
 
-      {/* 드래그 사전 조회 팝업 */}
-      <SelectionLookup
-        apiKey={effectiveKey}
-        model={effectiveSettings.model?.trim() || 'gemini-3.5-flash-lite'}
-        onAdd={addWord}
-      />
+          {tab === 'register' && (
+            <RegisterTab
+              categories={categories}
+              setCategories={setCategories}
+              activeCatId={activeCat?.id ?? ''}
+              setActiveCatId={setActiveCatId}
+            />
+          )}
+
+          {/* 대화 탭은 언마운트하지 않고 숨김 → 탭 전환해도 세션 유지 */}
+          <div style={{ display: tab === 'chat' ? undefined : 'none' }}>
+            <ChatTab
+              category={activeCat}
+              settings={effectiveSettings}
+              recordFocusTurn={recordFocusTurn}
+              recordFreeTurn={recordFreeTurn}
+              addGrammar={addGrammar}
+              studyWords={studyWords}
+              openSettings={() => setShowSettings(true)}
+            />
+          </div>
+
+          {tab === 'history' && (
+            <HistoryTab
+              progress={progress}
+              clearProgress={clearProgress}
+              grammarStats={grammarStats}
+              clearGrammar={clearGrammar}
+            />
+          )}
+
+          {tab === 'wordbook' && (
+            <WordbookTab words={words} removeWord={removeWord} clearWords={clearWords} />
+          )}
+
+          {showSettings && (
+            <SettingsModal
+              settings={effectiveSettings}
+              categories={categories}
+              vaultSecret={vault?.secret}
+              hasKey={!!effectiveKey}
+              onSave={setSettings}
+              onClearKey={clearKey}
+              onClose={() => setShowSettings(false)}
+            />
+          )}
+
+          {/* 드래그 사전 조회 팝업 */}
+          <SelectionLookup
+            apiKey={effectiveKey}
+            model={effectiveSettings.model?.trim() || 'gemini-3.5-flash-lite'}
+            onAdd={addWord}
+          />
+        </>
+      )}
 
       <footer className="footer">
         영어식 사고 · Gemini 2.5 Flash + Native Audio TTS · git 저장

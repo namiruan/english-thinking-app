@@ -61,14 +61,14 @@ export default function SettingsModal({
   const gh: GitHubConfig = draft.github ?? defaultGitHub;
   const setGh = (patch: Partial<GitHubConfig>) => setDraft({ ...draft, github: { ...gh, ...patch } });
 
-  /** 새 secret 계산 (키 입력 시 암호화, 아니면 기존 잠금 유지) */
-  const resolveSecret = async (): Promise<EncryptedBlob | undefined> => {
-    if (expKey.trim()) {
-      if (pw.length < 8) throw new Error('비밀번호는 8자 이상을 권장해요. (길수록 안전)');
-      if (pw !== pw2) throw new Error('비밀번호 확인이 일치하지 않아요.');
-      return encryptSecret(expKey.trim(), pw);
-    }
-    return vaultSecret; // 구문만 갱신, 기존 잠금 유지
+  /** API 키 + 구문을 모두 비번으로 암호화한 vault.json 생성 (비공개) */
+  const buildEncryptedVault = async (): Promise<string> => {
+    if (pw.length < 8) throw new Error('비밀번호는 8자 이상을 권장해요. (길수록 안전)');
+    if (pw !== pw2) throw new Error('비밀번호 확인이 일치하지 않아요.');
+    const apiKey = expKey.trim() || settings.apiKey || '';
+    const secret = apiKey ? await encryptSecret(apiKey, pw) : undefined;
+    const phrasesEnc = await encryptSecret(JSON.stringify(categories), pw);
+    return buildVaultJson({ phrasesEnc, secret });
   };
 
   const makeFile = async () => {
@@ -76,8 +76,7 @@ export default function SettingsModal({
     setCommitUrl('');
     setBusy(true);
     try {
-      const secret = await resolveSecret();
-      setGenerated(buildVaultJson(categories, secret));
+      setGenerated(await buildEncryptedVault());
       setMsg('파일을 만들었어요. 다운로드하거나 GitHub에 바로 저장하세요.');
     } catch (e) {
       setMsg(e instanceof Error ? e.message : String(e));
@@ -95,8 +94,7 @@ export default function SettingsModal({
     }
     setBusyGit(true);
     try {
-      const secret = await resolveSecret();
-      const content = buildVaultJson(categories, secret);
+      const content = await buildEncryptedVault();
       setGenerated(content);
       onSave(draft); // 토큰·설정 저장(브라우저)
       const url = await commitFile(gh, content, 'Update vault via app');
