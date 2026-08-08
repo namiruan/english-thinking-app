@@ -6,6 +6,9 @@ import {
   synthCloud,
   voicesForModel,
   defaultVoiceForModel,
+  isQuotaError,
+  markQuotaHit,
+  isQuotaLocked,
 } from '../lib/cloudtts';
 import { encryptSecret } from '../lib/crypto';
 import { buildVaultJson } from '../lib/vault';
@@ -49,6 +52,7 @@ export default function SettingsModal({
   });
 
   const [cloudMsg, setCloudMsg] = useState('');
+  const [quotaLocked, setQuotaLocked] = useState(isQuotaLocked());
 
   // vault 생성용
   const [expKey, setExpKey] = useState(settings.apiKey || '');
@@ -216,6 +220,7 @@ export default function SettingsModal({
             className="select"
             style={{ marginTop: 8 }}
             value={draft.ttsModel ?? 'aura-1'}
+            disabled={quotaLocked}
             onChange={(e) =>
               setDraft({
                 ...draft,
@@ -235,17 +240,19 @@ export default function SettingsModal({
                 className="select"
                 style={{ flex: 1 }}
                 value={draft.cloudVoice ?? defaultVoiceForModel(draft.ttsModel)}
+                disabled={quotaLocked}
                 onChange={(e) => setDraft({ ...draft, cloudVoice: e.target.value })}
               >
                 {voicesForModel(draft.ttsModel).map((v) => (
                   <option key={v.id} value={v.id}>
-                    {v.label}
+                    {quotaLocked ? `🔒 ${v.label}` : v.label}
                   </option>
                 ))}
               </select>
               <button
                 className="btn"
                 type="button"
+                disabled={quotaLocked}
                 onClick={async () => {
                   setCloudMsg('재생 중…');
                   try {
@@ -261,14 +268,17 @@ export default function SettingsModal({
                       await audio.play();
                       setCloudMsg('✓ 재생됐어요');
                     } catch {
-                      setCloudMsg('음성은 정상적으로 받았지만 브라우저가 재생을 막았어요. 버튼을 한 번 더 눌러보세요.');
+                      setCloudMsg('브라우저가 재생을 막았어요. 한 번 더 눌러주세요.');
                     }
                   } catch (e) {
-                    // 클라우드 실패(주로 한도 429) → 브라우저 내장 음성으로 대체 재생
+                    if (isQuotaError(e)) {
+                      markQuotaHit();
+                      setQuotaLocked(true);
+                    }
                     if (browserTtsSupported() && speakBrowser("I'm starting to like this app.")) {
-                      setCloudMsg('무료 음성 한도 초과 → 브라우저 내장 음성으로 재생했어요 (대화창도 동일하게 대체돼요)');
+                      setCloudMsg('한도 초과 — 브라우저 음성으로 재생했어요.');
                     } else {
-                      setCloudMsg('실패: ' + (e instanceof Error ? e.message : String(e)));
+                      setCloudMsg('실패: ' + (e instanceof Error ? e.message : String(e)).slice(0, 80));
                     }
                   }
                 }}
@@ -276,6 +286,12 @@ export default function SettingsModal({
                 ▶ 미리듣기
               </button>
             </div>
+            {quotaLocked && (
+              <p className="hint" style={{ margin: '8px 0 0', color: 'var(--muted)' }}>
+                🔒 오늘 무료 음성 한도를 다 썼어요. 내일 리셋되며, 그동안 대화에서는 브라우저 음성으로
+                재생돼요.
+              </p>
+            )}
             {cloudMsg && (
               <p className="hint" style={{ margin: '6px 0 0', color: cloudMsg.startsWith('✓') ? 'var(--good)' : cloudMsg.startsWith('실패') ? 'var(--danger)' : 'var(--muted)' }}>
                 {cloudMsg}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Category, Settings } from './types';
 import {
   defaultSettings,
@@ -48,6 +48,16 @@ export default function App() {
 
   const [tab, setTab] = useState<Tab>('chat');
   const [showSettings, setShowSettings] = useState(false);
+
+  // 시스템 안내용 토스트 (학습 내용이 아닌 알림)
+  const [toasts, setToasts] = useState<{ id: number; text: string }[]>([]);
+  const toastIdRef = useRef(0);
+  const showToast = useCallback((text: string) => {
+    const id = ++toastIdRef.current;
+    setToasts((prev) => [...prev, { id, text }]);
+    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 4500);
+  }, []);
+  const dismissToast = (id: number) => setToasts((prev) => prev.filter((t) => t.id !== id));
 
   // 잠금 / vault
   const [vault, setVault] = useState<Vault | null>(null);
@@ -293,6 +303,7 @@ export default function App() {
               addGrammar={addGrammar}
               studyWords={studyWords}
               openSettings={() => setShowSettings(true)}
+              showToast={showToast}
             />
           </div>
 
@@ -338,6 +349,16 @@ export default function App() {
       <footer className="footer">
         영어식 사고 · Gemini 2.5 Flash + Native Audio TTS · git 저장
       </footer>
+
+      {toasts.length > 0 && (
+        <div className="toast-host">
+          {toasts.map((t) => (
+            <div key={t.id} className="toast" onClick={() => dismissToast(t.id)}>
+              {t.text}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

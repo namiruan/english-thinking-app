@@ -38,6 +38,32 @@ export const AURA2_VOICES: CloudVoice[] = [
   { id: 'atlas', label: 'Atlas' },
 ];
 
+// ── 무료 한도(하루 10k neuron) 소진 상태 (UTC 기준, 다음날 리셋) ──
+const QUOTA_KEY = 'et.ttsQuotaHitUTC';
+const utcDay = () => new Date().toISOString().slice(0, 10);
+
+/** 에러가 무료 한도 초과(429)인지 */
+export function isQuotaError(e: unknown): boolean {
+  const m = (e instanceof Error ? e.message : String(e)).toLowerCase();
+  return m.includes('429') || m.includes('neuron') || m.includes('allocation');
+}
+/** 오늘 한도 소진으로 표시 */
+export function markQuotaHit(): void {
+  try {
+    localStorage.setItem(QUOTA_KEY, utcDay());
+  } catch {
+    /* ignore */
+  }
+}
+/** 오늘(UTC) 한도가 잠겨있는지 */
+export function isQuotaLocked(): boolean {
+  try {
+    return localStorage.getItem(QUOTA_KEY) === utcDay();
+  } catch {
+    return false;
+  }
+}
+
 export function voicesForModel(model?: string): CloudVoice[] {
   return model === 'aura-2-en' ? AURA2_VOICES : AURA1_VOICES;
 }

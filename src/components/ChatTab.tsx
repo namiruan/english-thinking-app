@@ -10,7 +10,7 @@ import type {
 } from '../types';
 import { newId } from '../store';
 import { focusTurn, freeTurn, friendlyError, type Turn } from '../lib/gemini';
-import { synthCloudBuffer } from '../lib/cloudtts';
+import { synthCloudBuffer, isQuotaError, markQuotaHit } from '../lib/cloudtts';
 import { speakBrowser, stopBrowser, browserTtsSupported } from '../lib/browsertts';
 import { catHue } from '../lib/ui';
 import PhraseCombobox from './PhraseCombobox';
@@ -29,6 +29,7 @@ interface Props {
   addGrammar: (category: string, note: string, example: string) => void;
   studyWords: string[];
   openSettings: () => void;
+  showToast: (text: string) => void;
 }
 
 const CLEAN_GOAL = 3;
@@ -243,6 +244,7 @@ export default function ChatTab({
   addGrammar,
   studyWords,
   openSettings,
+  showToast,
 }: Props) {
   const [mode, setMode] = useState<Mode>('focus');
   const [phraseIdx, setPhraseIdx] = useState(0);
@@ -391,10 +393,7 @@ export default function ChatTab({
   const noteFallbackOnce = () => {
     if (fallbackNotedRef.current) return;
     fallbackNotedRef.current = true;
-    push({
-      role: 'model',
-      text: '🔊 무료 음성 한도를 다 써서 브라우저 내장 음성으로 대체해 재생해요. (내일 한도가 초기화되면 원래 음성으로 돌아와요)',
-    });
+    showToast('🔊 무료 음성 한도 초과 — 브라우저 음성으로 대체해요.');
   };
 
   // 페이지 어디든 첫 사용자 제스처에서 미리 잠금해제
@@ -454,7 +453,7 @@ export default function ChatTab({
     audio.play().catch(() => {
       setSpeakingId(null);
       audioPrimedRef.current = false;
-      push({ role: 'model', text: '🔊 자동 재생이 차단됐어요. 스피커 버튼(🔊)을 한 번 더 눌러주세요.' });
+      showToast('🔊 재생이 막혔어요. 🔊를 한 번 더 눌러주세요.');
     });
   };
 
@@ -479,12 +478,13 @@ export default function ChatTab({
       );
       await playBytes(bytes, id);
     } catch (e) {
+      if (isQuotaError(e)) markQuotaHit();
       // 클라우드 실패(한도 429 등) → 브라우저 내장 음성으로 대체
       if (browserTtsSupported() && playBrowser(text, id)) {
         noteFallbackOnce();
       } else {
         setSpeakingId(null);
-        push({ role: 'model', text: `🔊 음성 재생 실패: ${friendlyError(e)}` });
+        showToast(`🔊 음성 실패: ${friendlyError(e)}`);
       }
     }
   };
@@ -506,8 +506,9 @@ export default function ChatTab({
         settings.cloudVoice,
         settings.ttsModel,
       );
-    } catch {
+    } catch (e) {
       failed = true; // 한도 초과 등 → 브라우저 음성으로 대체
+      if (isQuotaError(e)) markQuotaHit();
     }
     const msg = push(data);
     const id = `${msg.id}:${suffix}`;
@@ -556,7 +557,7 @@ export default function ChatTab({
         await pushWithSpeech(freeToMessage(r), r.reply, '0');
       }
     } catch (e) {
-      push({ role: 'model', text: `⚠️ ${friendlyError(e)}` });
+      showToast(`⚠️ ${friendlyError(e)}`);
     } finally {
       setLoading(false);
     }
@@ -612,7 +613,7 @@ export default function ChatTab({
         await pushWithSpeech(freeToMessage(r), r.reply, '0');
       }
     } catch (e) {
-      push({ role: 'model', text: `⚠️ ${friendlyError(e)}` });
+      showToast(`⚠️ ${friendlyError(e)}`);
     } finally {
       setLoading(false);
     }

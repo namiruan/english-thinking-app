@@ -261,6 +261,46 @@ select {
   background: var(--accent-soft);
   color: var(--accent);
 }
+/* 시스템 안내 토스트 */
+.toast-host {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  width: max-content;
+  max-width: 92vw;
+  pointer-events: none;
+}
+.toast {
+  pointer-events: auto;
+  background: var(--text);
+  color: var(--bg);
+  padding: 10px 16px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 550;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  max-width: 92vw;
+  text-align: center;
+  animation: toast-in 0.18s ease;
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* 동기화 상태 뱃지 */
 .sync-badge {
   font-size: 11.5px;
