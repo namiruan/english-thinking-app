@@ -11,6 +11,7 @@ interface Props {
 
 export default function UnlockModal({ secret, phrasesEnc, onUnlock }: Props) {
   const [pw, setPw] = useState('');
+  const [remember, setRemember] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -23,6 +24,9 @@ export default function UnlockModal({ secret, phrasesEnc, onUnlock }: Props) {
       let categories: Category[] | null = null;
       if (secret) apiKey = await decryptSecret(secret, pw);
       if (phrasesEnc) categories = JSON.parse(await decryptSecret(phrasesEnc, pw)) as Category[];
+      // 비밀번호가 맞았을 때만 기기에 기억 (다음부터 자동 잠금 해제)
+      if (remember) localStorage.setItem('et.rememberedPw', pw);
+      else localStorage.removeItem('et.rememberedPw');
       onUnlock(apiKey, categories);
     } catch {
       setError('비밀번호가 올바르지 않아요.');
@@ -54,7 +58,12 @@ export default function UnlockModal({ secret, phrasesEnc, onUnlock }: Props) {
           )}
         </div>
 
-        <div className="row" style={{ justifyContent: 'flex-end' }}>
+        <label className="toggle" style={{ marginTop: 12 }}>
+          <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
+          이 기기에서 비밀번호 기억하기 (다음부터 자동 잠금 해제)
+        </label>
+
+        <div className="row" style={{ justifyContent: 'flex-end', marginTop: 12 }}>
           <button className="btn primary" onClick={submit} disabled={!pw || busy}>
             {busy ? <span className="spinner" /> : '잠금 해제'}
           </button>

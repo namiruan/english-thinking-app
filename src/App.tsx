@@ -9,6 +9,9 @@ import {
   useLocalStorage,
 } from './store';
 import { loadVault, type Vault } from './lib/vault';
+import { decryptSecret } from './lib/crypto';
+
+const REMEMBER_PW_KEY = 'et.rememberedPw';
 import ChatTab from './components/ChatTab';
 import RegisterTab from './components/RegisterTab';
 import HistoryTab from './components/HistoryTab';
@@ -63,6 +66,22 @@ export default function App() {
         setSelectedCatIds(phrases[0]?.id ? [phrases[0].id] : []);
         localStorage.setItem('et.initialized', '1');
       }
+      // 이 기기에 기억된 비밀번호가 있으면 자동으로 잠금 해제
+      if (v && (v.secret || v.phrasesEnc)) {
+        const remembered = localStorage.getItem(REMEMBER_PW_KEY);
+        if (remembered) {
+          try {
+            let apiKey: string | null = null;
+            let cats: Category[] | null = null;
+            if (v.secret) apiKey = await decryptSecret(v.secret, remembered);
+            if (v.phrasesEnc) cats = JSON.parse(await decryptSecret(v.phrasesEnc, remembered)) as Category[];
+            if (!alive) return;
+            handleUnlock(apiKey, cats);
+          } catch {
+            localStorage.removeItem(REMEMBER_PW_KEY);
+          }
+        }
+      }
       setBooted(true);
     })();
     return () => {
@@ -111,6 +130,14 @@ export default function App() {
     setShowSettings(false);
   };
 
+  // 기억된 비밀번호를 지우고 다시 잠금 (재입력 필요)
+  const lockNow = () => {
+    localStorage.removeItem(REMEMBER_PW_KEY);
+    setSessionKey(null);
+    setUnlocked(false);
+  };
+  const hasLock = !!(vault?.secret || vault?.phrasesEnc);
+
   return (
     <div className="app">
       <header className="header">
@@ -121,9 +148,16 @@ export default function App() {
             <div className="subtitle">입에 척 달라붙는 구문 훈련</div>
           </div>
         </div>
-        <button className="icon-btn" onClick={() => setShowSettings(true)} title="설정">
-          ⚙
-        </button>
+        <div className="row" style={{ gap: 6 }}>
+          {hasLock && !locked && (
+            <button className="icon-btn" onClick={lockNow} title="잠그기 (기억된 비밀번호 지우기)">
+              🔒
+            </button>
+          )}
+          <button className="icon-btn" onClick={() => setShowSettings(true)} title="설정">
+            ⚙
+          </button>
+        </div>
       </header>
 
       {locked ? (
