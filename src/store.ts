@@ -181,7 +181,7 @@ export function useProgress() {
 export function useWordbook() {
   const [words, setWords] = useLocalStorage<Record<string, WordEntry>>('et.wordbook', {});
   const addWord = useCallback(
-    (w: Pick<WordEntry, 'term' | 'english' | 'korean'>) => {
+    (w: Pick<WordEntry, 'term' | 'english' | 'korean' | 'source' | 'sourceLabel'>) => {
       const key = w.term.trim().toLowerCase();
       if (!key) return;
       setWords((prev) => ({
@@ -190,6 +190,9 @@ export function useWordbook() {
           term: w.term.trim(),
           english: w.english,
           korean: w.korean,
+          // 출처는 새 값이 있으면 갱신, 없으면 기존 유지
+          source: w.source ?? prev[key]?.source,
+          sourceLabel: w.sourceLabel ?? prev[key]?.sourceLabel,
           count: (prev[key]?.count ?? 0) + 1,
           date: new Date().toISOString(),
         },

@@ -5,7 +5,7 @@ import type { WordEntry } from '../types';
 interface Props {
   apiKey: string;
   model: string;
-  onAdd: (w: Pick<WordEntry, 'term' | 'english' | 'korean'>) => void;
+  onAdd: (w: Pick<WordEntry, 'term' | 'english' | 'korean' | 'source' | 'sourceLabel'>) => void;
 }
 
 interface Anchor {
@@ -89,7 +89,13 @@ export default function SelectionLookup({ apiKey, model, onAdd }: Props) {
             style={{ marginTop: 10 }}
             disabled={added}
             onClick={() => {
-              onAdd({ term: anchor.term, english: result.english, korean: result.korean });
+              onAdd({
+                term: anchor.term,
+                english: result.english,
+                korean: result.korean,
+                source: 'chat',
+                sourceLabel: '대화',
+              });
               setAdded(true);
             }}
           >

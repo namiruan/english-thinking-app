@@ -1,4 +1,5 @@
 import type { WordEntry } from '../types';
+import { catHue } from '../lib/ui';
 
 interface Props {
   words: Record<string, WordEntry>;
@@ -35,7 +36,19 @@ export default function WordbookTab({ words, removeWord, clearWords }: Props) {
           {list.map((w) => (
             <div className="word-item" key={w.term}>
               <div className="word-top">
-                <span className="word-term">{w.term}</span>
+                <div className="row" style={{ gap: 8, minWidth: 0 }}>
+                  <span className="word-term">{w.term}</span>
+                  {w.sourceLabel &&
+                    (w.source === 'chat' ? (
+                      <span className="cat-badge" style={{ ['--h' as string]: 265 }}>
+                        💬 {w.sourceLabel}
+                      </span>
+                    ) : (
+                      <span className="cat-badge" style={{ ['--h' as string]: catHue(w.sourceLabel) }}>
+                        📁 {w.sourceLabel}
+                      </span>
+                    ))}
+                </div>
                 <div className="row" style={{ gap: 6 }}>
                   <span className="chip accent">{w.count}회</span>
                   <button className="btn sm ghost danger" onClick={() => removeWord(w.term)}>

@@ -62,10 +62,14 @@ export interface HistoryEntry {
   date: string; // ISO
 }
 
+export type WordSource = 'import' | 'chat';
+
 export interface WordEntry {
   term: string; // 단어/숙어
   english: string; // 영어 풀이 (맥락을 담은 쉬운 정의)
   korean: string; // 한국어 뜻
+  source?: WordSource; // 등록 경로: 가져오기 / 대화
+  sourceLabel?: string; // 출처 라벨 (가져오기=대상 카테고리명, 대화="대화")
   count: number; // 저장/노출 횟수
   date: string; // 마지막 ISO
 }

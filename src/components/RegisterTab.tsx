@@ -9,7 +9,13 @@ interface Props {
   selectedCatIds: string[];
   toggleSelected: (id: string) => void;
   addSelected: (id: string) => void;
-  addWord: (w: { term: string; english: string; korean: string }) => void;
+  addWord: (w: {
+    term: string;
+    english: string;
+    korean: string;
+    source?: 'import' | 'chat';
+    sourceLabel?: string;
+  }) => void;
   apiKey?: string;
   model?: string;
 }
@@ -109,6 +115,10 @@ export default function RegisterTab({
     const wordItems = parsed.filter((p) => isSingleWord(p.text));
     const phraseItems = parsed.filter((p) => !isSingleWord(p.text));
 
+    // 단어장 출처 라벨 = 등록하려던 카테고리 이름 (기존 선택 or 새 이름)
+    const targetCat = categories.find((c) => c.id === importTargetId);
+    const wordSourceLabel = targetCat ? targetCat.name : importName.trim() || '가져오기';
+
     // 1) 구문 → 카테고리 등록
     let targetId = '';
     let targetName = '';
@@ -154,7 +164,7 @@ export default function RegisterTab({
           /* 실패 시 파싱값 사용 */
         }
       }
-      addWord({ term: w.text, english, korean });
+      addWord({ term: w.text, english, korean, source: 'import', sourceLabel: wordSourceLabel });
     }
 
     // 3) 구문 뜻 자동 채우기 (맥락 기반)
