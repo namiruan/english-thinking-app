@@ -40,11 +40,10 @@ export default {
     // 모델 선택 (화이트리스트)
     const MODELS = { 'aura-1': '@cf/deepgram/aura-1', 'aura-2-en': '@cf/deepgram/aura-2-en' };
     const modelId = MODELS[String(body.model || 'aura-1')] || MODELS['aura-1'];
-    // aura-1은 speaker 목록이 명확 → 지정, aura-2는 기본 화자 사용
-    const input = modelId.endsWith('aura-1') ? { text, speaker } : { text };
+    // 두 모델 모두 speaker 지원
 
     try {
-      const resp = await env.AI.run(modelId, input, { returnRawResponse: true });
+      const resp = await env.AI.run(modelId, { text, speaker }, { returnRawResponse: true });
       return new Response(resp.body, {
         headers: { ...CORS, 'Content-Type': 'audio/mpeg', 'Cache-Control': 'no-store' },
       });

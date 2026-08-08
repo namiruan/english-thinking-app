@@ -8,8 +8,8 @@ export interface CloudVoice {
   label: string;
 }
 
-// Deepgram Aura 화자
-export const CLOUD_VOICES: CloudVoice[] = [
+// Aura-1 화자
+export const AURA1_VOICES: CloudVoice[] = [
   { id: 'asteria', label: 'Asteria · 여성 (미국, 추천)' },
   { id: 'luna', label: 'Luna · 여성' },
   { id: 'stella', label: 'Stella · 여성' },
@@ -21,6 +21,29 @@ export const CLOUD_VOICES: CloudVoice[] = [
   { id: 'zeus', label: 'Zeus · 남성' },
   { id: 'angus', label: 'Angus · 남성 (아일랜드)' },
 ];
+
+// Aura-2 화자 (일부 · 미리듣기로 골라보세요)
+export const AURA2_VOICES: CloudVoice[] = [
+  { id: 'luna', label: 'Luna (기본)' },
+  { id: 'aurora', label: 'Aurora' },
+  { id: 'andromeda', label: 'Andromeda' },
+  { id: 'athena', label: 'Athena' },
+  { id: 'hera', label: 'Hera' },
+  { id: 'ophelia', label: 'Ophelia' },
+  { id: 'iris', label: 'Iris' },
+  { id: 'apollo', label: 'Apollo' },
+  { id: 'orion', label: 'Orion' },
+  { id: 'zeus', label: 'Zeus' },
+  { id: 'mars', label: 'Mars' },
+  { id: 'atlas', label: 'Atlas' },
+];
+
+export function voicesForModel(model?: string): CloudVoice[] {
+  return model === 'aura-2-en' ? AURA2_VOICES : AURA1_VOICES;
+}
+export function defaultVoiceForModel(model?: string): string {
+  return model === 'aura-2-en' ? 'luna' : 'asteria';
+}
 
 export const CLOUD_MODELS = [
   { id: 'aura-1', label: 'Aura-1 · 자연스러움 (음성 선택 가능)' },

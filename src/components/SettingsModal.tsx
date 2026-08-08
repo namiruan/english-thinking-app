@@ -1,7 +1,12 @@
 import { useState } from 'react';
 import type { Category, GitHubConfig, Settings } from '../types';
 import { CHAT_MODELS } from '../lib/gemini';
-import { CLOUD_VOICES, CLOUD_MODELS, synthCloud } from '../lib/cloudtts';
+import {
+  CLOUD_MODELS,
+  synthCloud,
+  voicesForModel,
+  defaultVoiceForModel,
+} from '../lib/cloudtts';
 import { encryptSecret, type EncryptedBlob } from '../lib/crypto';
 import { buildVaultJson } from '../lib/vault';
 import { commitFile } from '../lib/github';
@@ -202,7 +207,13 @@ export default function SettingsModal({
             className="select"
             style={{ marginTop: 8 }}
             value={draft.ttsModel ?? 'aura-1'}
-            onChange={(e) => setDraft({ ...draft, ttsModel: e.target.value })}
+            onChange={(e) =>
+              setDraft({
+                ...draft,
+                ttsModel: e.target.value,
+                cloudVoice: defaultVoiceForModel(e.target.value),
+              })
+            }
           >
             {CLOUD_MODELS.map((m) => (
               <option key={m.id} value={m.id}>
@@ -214,10 +225,10 @@ export default function SettingsModal({
               <select
                 className="select"
                 style={{ flex: 1 }}
-                value={draft.cloudVoice ?? 'asteria'}
+                value={draft.cloudVoice ?? defaultVoiceForModel(draft.ttsModel)}
                 onChange={(e) => setDraft({ ...draft, cloudVoice: e.target.value })}
               >
-                {CLOUD_VOICES.map((v) => (
+                {voicesForModel(draft.ttsModel).map((v) => (
                   <option key={v.id} value={v.id}>
                     {v.label}
                   </option>
