@@ -12,6 +12,7 @@ import type {
 import { newId } from '../store';
 import { focusTurn, freeTurn, friendlyError, synthesizeSpeech, type Turn } from '../lib/gemini';
 import { synthKokoro } from '../lib/kokoro';
+import { synthCloud } from '../lib/cloudtts';
 import {
   cancelBrowserSpeech,
   isSpeechRecognitionSupported,
@@ -361,6 +362,18 @@ export default function ChatTab({
       }
       return;
     }
+    // 클라우드 음성 (내 Cloudflare Worker)
+    if (voiceEngine === 'cloud') {
+      setSpeakingId(id);
+      try {
+        const url = await synthCloud(settings.ttsUrl || '', settings.ttsSecret || '', text, settings.cloudVoice);
+        playUrl(url, id);
+      } catch (e) {
+        setSpeakingId(null);
+        push({ role: 'model', text: `🔊 클라우드 음성 실패: ${friendlyError(e)}` });
+      }
+      return;
+    }
     if (!settings.apiKey) return;
     setSpeakingId(id);
     try {
@@ -392,6 +405,8 @@ export default function ChatTab({
     try {
       if (voiceEngine === 'kokoro') {
         url = await synthKokoro(ttsText, settings.kokoroVoice);
+      } else if (voiceEngine === 'cloud') {
+        url = await synthCloud(settings.ttsUrl || '', settings.ttsSecret || '', ttsText, settings.cloudVoice);
       } else if (settings.apiKey) {
         url = await synthesizeSpeech(settings.apiKey, ttsText, settings.voice);
       }

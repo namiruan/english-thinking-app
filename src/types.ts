@@ -79,10 +79,13 @@ export interface GitHubConfig {
 export interface Settings {
   apiKey: string;
   model?: string; // 대화/사전 모델 (기본 gemini-2.5-flash)
-  voiceEngine?: 'gemini' | 'browser' | 'kokoro'; // 음성 엔진 (기본 gemini)
+  voiceEngine?: 'gemini' | 'browser' | 'kokoro' | 'cloud'; // 음성 엔진 (기본 gemini)
   voice: string; // Gemini TTS 음성 이름
   browserVoice?: string; // 브라우저 음성 이름 (선택)
   kokoroVoice?: string; // Kokoro 음성 (선택)
+  cloudVoice?: string; // 클라우드(Aura) 음성 (선택)
+  ttsUrl?: string; // 클라우드 TTS Worker 주소
+  ttsSecret?: string; // 클라우드 TTS 시크릿 (선택)
   autoSpeak: boolean; // AI 응답 자동 재생
   github?: GitHubConfig; // 앱에서 GitHub에 바로 저장할 때 사용
 }

@@ -359,6 +359,7 @@ export async function synthesizeSpeech(
 export function friendlyError(e: unknown): string {
   const msg = e instanceof Error ? e.message : String(e);
   if (msg === 'NO_API_KEY') return 'API 키가 없어요. 우측 상단 "설정"에서 Gemini API 키를 입력해주세요.';
+  if (msg === 'NO_TTS_URL') return '설정에서 클라우드 TTS 서버 주소를 입력해주세요.';
   if (/quota|rate|RESOURCE_EXHAUSTED|429/i.test(msg))
     return '요청이 너무 많거나 무료 사용량을 초과했어요. 약 1분 후 다시 시도해주세요.';
   if (/API key not valid|401|403|PERMISSION/i.test(msg))

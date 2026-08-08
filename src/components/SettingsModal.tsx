@@ -3,6 +3,7 @@ import type { Category, GitHubConfig, Settings } from '../types';
 import { TTS_VOICES, CHAT_MODELS } from '../lib/gemini';
 import { listEnglishVoices, onVoicesChanged, speakBrowser } from '../lib/speech';
 import { KOKORO_VOICES, loadKokoro, kokoroDevice } from '../lib/kokoro';
+import { CLOUD_VOICES, synthCloud } from '../lib/cloudtts';
 import { encryptSecret, type EncryptedBlob } from '../lib/crypto';
 import { buildVaultJson } from '../lib/vault';
 import { commitFile } from '../lib/github';
@@ -49,6 +50,7 @@ export default function SettingsModal({
 
   const [kokoroPct, setKokoroPct] = useState<number | null>(null);
   const [kokoroMsg, setKokoroMsg] = useState('');
+  const [cloudMsg, setCloudMsg] = useState('');
   const prepKokoro = async () => {
     setKokoroMsg('');
     setKokoroPct(0);
@@ -216,8 +218,73 @@ export default function SettingsModal({
             <option value="gemini">Gemini 원어민 음성 (고품질 · 한도 사용)</option>
             <option value="browser">브라우저 음성 (무료 · 무제한)</option>
             <option value="kokoro">Kokoro 신경망 음성 (무료 · 무제한 · 자연스러움)</option>
+            <option value="cloud">클라우드 음성 (내 Cloudflare · 빠름 · 자연스러움)</option>
           </select>
         </div>
+
+        {draft.voiceEngine === 'cloud' && (
+          <div className="field">
+            <label>클라우드 TTS 서버 (Cloudflare Worker)</label>
+            <input
+              className="input"
+              placeholder="https://et-tts.xxx.workers.dev"
+              value={draft.ttsUrl ?? ''}
+              onChange={(e) => setDraft({ ...draft, ttsUrl: e.target.value.trim() })}
+            />
+            <input
+              className="input"
+              style={{ marginTop: 8 }}
+              type="password"
+              placeholder="시크릿 (설정했다면)"
+              value={draft.ttsSecret ?? ''}
+              onChange={(e) => setDraft({ ...draft, ttsSecret: e.target.value })}
+            />
+            <div className="row" style={{ marginTop: 8, gap: 8 }}>
+              <select
+                className="select"
+                style={{ flex: 1 }}
+                value={draft.cloudVoice ?? 'asteria'}
+                onChange={(e) => setDraft({ ...draft, cloudVoice: e.target.value })}
+              >
+                {CLOUD_VOICES.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.label}
+                  </option>
+                ))}
+              </select>
+              <button
+                className="btn"
+                type="button"
+                onClick={async () => {
+                  setCloudMsg('재생 중…');
+                  try {
+                    const url = await synthCloud(
+                      draft.ttsUrl || '',
+                      draft.ttsSecret || '',
+                      "I'm starting to like this app.",
+                      draft.cloudVoice,
+                    );
+                    new Audio(url).play();
+                    setCloudMsg('✓ 연결 성공');
+                  } catch (e) {
+                    setCloudMsg('실패: ' + (e instanceof Error ? e.message : String(e)));
+                  }
+                }}
+              >
+                ▶ 미리듣기
+              </button>
+            </div>
+            {cloudMsg && (
+              <p className="hint" style={{ margin: '6px 0 0', color: cloudMsg.startsWith('✓') ? 'var(--good)' : cloudMsg.startsWith('실패') ? 'var(--danger)' : 'var(--muted)' }}>
+                {cloudMsg}
+              </p>
+            )}
+            <p className="hint" style={{ margin: '8px 0 0' }}>
+              무료 서버는 <code>worker/README.md</code> 안내대로 Cloudflare에 배포하면 돼요. 아이폰/패드/맥
+              모두 빠르고 자연스러워요.
+            </p>
+          </div>
+        )}
 
         {draft.voiceEngine === 'kokoro' && (
           <div className="field">
