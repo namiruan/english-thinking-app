@@ -671,6 +671,22 @@ textarea.input:focus {
   padding: 14px 16px;
   border-bottom: 1px solid var(--border);
 }
+.cat-collapse {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  flex: none;
+  display: grid;
+  place-items: center;
+}
+.cat-collapse:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
 .cat-head .cat-name {
   font-weight: 620;
   font-size: 14.5px;

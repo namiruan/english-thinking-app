@@ -25,6 +25,7 @@ export default function RegisterTab({
   const [newCat, setNewCat] = useState('');
   const [draft, setDraft] = useState<Record<string, Draft>>({});
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [importName, setImportName] = useState('');
   const [importText, setImportText] = useState('');
   const [importMsg, setImportMsg] = useState('');
@@ -170,6 +171,23 @@ export default function RegisterTab({
     );
   };
 
+  const toggleCollapse = (catId: string) =>
+    setCollapsed((prev) => ({ ...prev, [catId]: !prev[catId] }));
+
+  const movePhrase = (fromId: string, phraseId: string, toId: string) => {
+    if (fromId === toId) return;
+    setCategories((prev) => {
+      const phrase = prev.find((c) => c.id === fromId)?.phrases.find((p) => p.id === phraseId);
+      if (!phrase) return prev;
+      return prev.map((c) => {
+        if (c.id === fromId) return { ...c, phrases: c.phrases.filter((p) => p.id !== phraseId) };
+        if (c.id === toId) return { ...c, phrases: [...c.phrases, phrase] };
+        return c;
+      });
+    });
+    setEditingId(null);
+  };
+
   const renameCategory = (catId: string, name: string) => {
     setCategories((prev) => prev.map((c) => (c.id === catId ? { ...c, name } : c)));
   };
@@ -248,6 +266,14 @@ export default function RegisterTab({
       {categories.map((cat) => (
         <div className="card" key={cat.id} style={{ marginBottom: 16 }}>
           <div className="cat-head">
+            <button
+              className="cat-collapse"
+              onClick={() => toggleCollapse(cat.id)}
+              aria-label={collapsed[cat.id] ? '펼치기' : '접기'}
+              title={collapsed[cat.id] ? '펼치기' : '접기'}
+            >
+              {collapsed[cat.id] ? '▸' : '▾'}
+            </button>
             <div style={{ flex: 1, minWidth: 0 }}>
               <input
                 className="cat-name-input"
@@ -272,6 +298,8 @@ export default function RegisterTab({
             </div>
           </div>
 
+          {!collapsed[cat.id] && (
+            <>
           {cat.phrases.map((p) =>
             editingId === p.id ? (
               // 수정 모드
@@ -305,6 +333,23 @@ export default function RegisterTab({
                     value={p.example ?? ''}
                     onChange={(e) => updatePhrase(cat.id, p.id, { example: e.target.value })}
                   />
+                  {categories.length > 1 && (
+                    <div className="row" style={{ marginTop: 8, gap: 8 }}>
+                      <span className="hint" style={{ margin: 0 }}>카테고리 이동:</span>
+                      <select
+                        className="select"
+                        style={{ flex: 1, fontSize: 13 }}
+                        value={cat.id}
+                        onChange={(e) => movePhrase(cat.id, p.id, e.target.value)}
+                      >
+                        {categories.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                   <div className="row" style={{ marginTop: 8, justifyContent: 'flex-end' }}>
                     <button className="btn sm ghost danger" onClick={() => removePhrase(cat.id, p.id)}>
                       삭제
@@ -382,6 +427,8 @@ export default function RegisterTab({
               </button>
             </div>
           </div>
+            </>
+          )}
         </div>
       ))}
 
