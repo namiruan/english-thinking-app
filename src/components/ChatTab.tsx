@@ -159,6 +159,17 @@ function CorrectionCard({
         {showKo && <div className="tline-ko">{c.correctedKo}</div>}
       </div>
       <div className="correction-reason">💡 {c.reason}</div>
+      {c.paraphrases && c.paraphrases.length > 0 && (
+        <div className="paraphrases">
+          <div className="paraphrases-label">🗣 이렇게도 말해요 (더 구어체·요즘 표현)</div>
+          {c.paraphrases.map((p, i) => (
+            <div className="paraphrase-line" key={i}>
+              {speakButton(p, `${msgId}:pp${i}`, speakingId, onSpeak, onStop, disabled, 'speak mini')}
+              <span className="paraphrase-text">{p}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -461,6 +472,7 @@ export default function ChatTab({
                       corrected: r.corrected,
                       correctedKo: r.correctedKo,
                       reason: r.correctionReason,
+                      paraphrases: r.paraphrases,
                     },
                   }
                 : m,

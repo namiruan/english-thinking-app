@@ -79,6 +79,7 @@ export interface FocusResult {
   corrected: string; // 학습자 답변을 맥락에 맞게 다듬은 영어 (첫 턴이면 "")
   correctedKo: string; // 교정 문장의 뜻 (첫 턴이면 "")
   correctionReason: string; // 왜 그렇게 고쳤는지 한국어 설명 (첫 턴이면 "")
+  paraphrases: string[]; // 같은 의도를 더 구어체/요즘 표현으로 바꾼 대안 (첫 턴이면 [])
   grammarIssues: GrammarIssue[]; // 직전 답변의 문법 오류 (오타 제외, 없으면 [])
   question: string; // 영어 질문 (대화체)
   questionKo: string; // 질문의 자연스러운 한국어 번역
@@ -103,6 +104,7 @@ Every turn return JSON:
 - "corrected": Rewrite the learner's previous answer into the most NATURAL English that expresses what they were trying to say, in this conversation's context (fix awkward wording, grammar, word choice; keep their intent and the target phrase when appropriate). If their answer was already natural, return it lightly polished or unchanged. On the FIRST turn, "".
 - "correctedKo": natural Korean meaning of "corrected". On the FIRST turn, "".
 - "correctionReason": a short, specific Korean explanation of WHY you rewrote it that way — what sounded off and how the correction better fits the intended meaning/nuance. If it was already natural, say so briefly and note any subtle nuance. On the FIRST turn, "".
+- "paraphrases": an array of 2-3 alternative English sentences that express the SAME intent as the learner's answer, but in a MORE COLLOQUIAL / SPOKEN or CURRENT, up-to-date way that native speakers actually say today (casual register, common idioms/phrasings, contractions). Keep each short and natural; make them genuinely different in wording from "corrected" and from each other. English only, no Korean, no labels. Return [] on the FIRST turn or if the answer was a one-word/trivial reply with no meaningful way to rephrase.
 - "grammarIssues": an array describing the GRAMMAR errors in the learner's previous answer. Grammar mistakes ONLY — never include spelling/typos or style preferences. Each item is an object: { "category": one exact label from this fixed list — ${GRAMMAR_CATEGORIES.map((c) => `"${c}"`).join(', ')}; "note": a very short Korean sub-label naming the SPECIFIC point (e.g. "현재완료 시제", "a/an 선택", "동사+동명사", "in/on/at 혼동"). } Use "기타 문법" only when nothing else fits, and still give a precise "note". Return [] if there was no grammatical error, or on the FIRST turn.
 - "question": a short, natural spoken-English question, like a real friend chatting, that naturally invites the learner to answer USING the target phrase. Vary the topic each turn.
 - "questionKo": Korean translation of "question".
@@ -120,6 +122,7 @@ const focusSchema = {
     corrected: { type: Type.STRING },
     correctedKo: { type: Type.STRING },
     correctionReason: { type: Type.STRING },
+    paraphrases: { type: Type.ARRAY, items: { type: Type.STRING } },
     grammarIssues: {
       type: Type.ARRAY,
       items: {
@@ -142,6 +145,7 @@ const focusSchema = {
     'corrected',
     'correctedKo',
     'correctionReason',
+    'paraphrases',
     'grammarIssues',
     'question',
     'questionKo',
@@ -183,6 +187,9 @@ export async function focusTurn(
     corrected: parsed.corrected ?? '',
     correctedKo: parsed.correctedKo ?? '',
     correctionReason: parsed.correctionReason ?? '',
+    paraphrases: Array.isArray(parsed.paraphrases)
+      ? parsed.paraphrases.filter((s): s is string => typeof s === 'string' && s.trim().length > 0)
+      : [],
     grammarIssues: Array.isArray(parsed.grammarIssues)
       ? parsed.grammarIssues
           .filter((g): g is GrammarIssue => !!g && typeof g.category === 'string')

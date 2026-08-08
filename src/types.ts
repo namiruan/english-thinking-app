@@ -27,6 +27,7 @@ export interface Correction {
   corrected: string; // 맥락에 맞게 다듬은 자연스러운 영어 문장
   correctedKo: string; // 그 문장의 뜻
   reason: string; // 왜 그렇게 고쳤는지 (한국어)
+  paraphrases?: string[]; // 같은 의도를 더 구어체/요즘 표현으로 바꾼 대안 문장들
 }
 
 /** 집중 모드 질문: 질문 + (숨김) 번역 + (숨김) 예시 답변 */

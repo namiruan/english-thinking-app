@@ -493,6 +493,29 @@ select {
   color: var(--muted);
   line-height: 1.55;
 }
+.paraphrases {
+  margin-top: 10px;
+  margin-left: 36px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+}
+.paraphrases-label {
+  font-size: 11.5px;
+  font-weight: 650;
+  color: var(--faint);
+  margin-bottom: 6px;
+}
+.paraphrase-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 3px 0;
+}
+.paraphrase-text {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.5;
+}
 
 .speak {
   flex: none;
