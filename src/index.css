@@ -653,6 +653,16 @@ textarea.input:focus {
   color: var(--muted);
   margin-top: 2px;
 }
+.phrase-item .p-sub {
+  font-size: 12px;
+  color: var(--faint);
+  margin-top: 3px;
+  line-height: 1.45;
+  word-break: break-word;
+}
+.phrase-item.edit {
+  align-items: stretch;
+}
 
 .cat-head {
   display: flex;

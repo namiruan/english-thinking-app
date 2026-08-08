@@ -20,10 +20,11 @@ export default function RegisterTab({
   apiKey,
   model,
 }: Props) {
+  type Draft = { text: string; meaning: string; explanation: string; example: string };
+  const emptyDraft: Draft = { text: '', meaning: '', explanation: '', example: '' };
   const [newCat, setNewCat] = useState('');
-  const [draft, setDraft] = useState<Record<string, { text: string; meaning: string; note: string }>>(
-    {},
-  );
+  const [draft, setDraft] = useState<Record<string, Draft>>({});
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [importName, setImportName] = useState('');
   const [importText, setImportText] = useState('');
   const [importMsg, setImportMsg] = useState('');
@@ -127,8 +128,8 @@ export default function RegisterTab({
   };
 
   const addPhrase = (catId: string) => {
-    const d = draft[catId];
-    if (!d || !d.text.trim() || !d.meaning.trim()) return;
+    const dd = draft[catId];
+    if (!dd || !dd.text.trim()) return;
     setCategories((prev) =>
       prev.map((c) =>
         c.id === catId
@@ -138,16 +139,27 @@ export default function RegisterTab({
                 ...c.phrases,
                 {
                   id: newId(),
-                  text: d.text.trim(),
-                  meaning: d.meaning.trim(),
-                  note: d.note.trim() || undefined,
+                  text: dd.text.trim(),
+                  meaning: dd.meaning.trim(),
+                  ...(dd.explanation.trim() ? { explanation: dd.explanation.trim() } : {}),
+                  ...(dd.example.trim() ? { example: dd.example.trim() } : {}),
                 },
               ],
             }
           : c,
       ),
     );
-    setDraft((prev) => ({ ...prev, [catId]: { text: '', meaning: '', note: '' } }));
+    setDraft((prev) => ({ ...prev, [catId]: emptyDraft }));
+  };
+
+  const updatePhrase = (catId: string, phraseId: string, patch: Partial<Phrase>) => {
+    setCategories((prev) =>
+      prev.map((c) =>
+        c.id === catId
+          ? { ...c, phrases: c.phrases.map((p) => (p.id === phraseId ? { ...p, ...patch } : p)) }
+          : c,
+      ),
+    );
   };
 
   const removePhrase = (catId: string, phraseId: string) => {
@@ -167,8 +179,8 @@ export default function RegisterTab({
     });
   };
 
-  const d = (catId: string) => draft[catId] ?? { text: '', meaning: '', note: '' };
-  const setD = (catId: string, patch: Partial<{ text: string; meaning: string; note: string }>) =>
+  const d = (catId: string): Draft => draft[catId] ?? emptyDraft;
+  const setD = (catId: string, patch: Partial<Draft>) =>
     setDraft((prev) => ({ ...prev, [catId]: { ...d(catId), ...patch } }));
 
   return (
@@ -250,58 +262,108 @@ export default function RegisterTab({
             </div>
           </div>
 
-          {cat.phrases.map((p) => (
-            <div className="phrase-item" key={p.id}>
-              <div>
-                <div className="p-text">
-                  {p.text}
-                  {p.note && <span className="target-note" style={{ color: 'var(--faint)', fontWeight: 400 }}> {p.note}</span>}
+          {cat.phrases.map((p) =>
+            editingId === p.id ? (
+              // 수정 모드
+              <div className="phrase-item edit" key={p.id}>
+                <div style={{ flex: 1 }}>
+                  <input
+                    className="input"
+                    placeholder="구문 (배울 표현)"
+                    value={p.text}
+                    onChange={(e) => updatePhrase(cat.id, p.id, { text: e.target.value })}
+                    style={{ marginBottom: 6, fontFamily: 'var(--mono)' }}
+                  />
+                  <input
+                    className="input"
+                    placeholder="뜻 (한국어)"
+                    value={p.meaning}
+                    onChange={(e) => updatePhrase(cat.id, p.id, { meaning: e.target.value })}
+                    style={{ marginBottom: 6 }}
+                  />
+                  <textarea
+                    className="input"
+                    rows={2}
+                    placeholder="영어식 풀이 (선택)"
+                    value={p.explanation ?? ''}
+                    onChange={(e) => updatePhrase(cat.id, p.id, { explanation: e.target.value })}
+                    style={{ marginBottom: 6, resize: 'vertical', fontSize: 13 }}
+                  />
+                  <input
+                    className="input"
+                    placeholder="예문 (선택)"
+                    value={p.example ?? ''}
+                    onChange={(e) => updatePhrase(cat.id, p.id, { example: e.target.value })}
+                  />
+                  <div className="row" style={{ marginTop: 8, justifyContent: 'flex-end' }}>
+                    <button className="btn sm ghost danger" onClick={() => removePhrase(cat.id, p.id)}>
+                      삭제
+                    </button>
+                    <button className="btn sm primary" onClick={() => setEditingId(null)}>
+                      완료
+                    </button>
+                  </div>
                 </div>
-                <div className="p-meaning">{p.meaning}</div>
-                {p.explanation && (
-                  <div className="p-meaning" style={{ color: 'var(--faint)', marginTop: 3 }}>
-                    💡 {p.explanation}
-                  </div>
-                )}
-                {p.example && (
-                  <div className="p-meaning" style={{ color: 'var(--faint)', marginTop: 2, fontFamily: 'var(--mono)' }}>
-                    📝 {p.example}
-                  </div>
-                )}
               </div>
-              <button className="btn sm ghost danger" onClick={() => removePhrase(cat.id, p.id)}>
-                ✕
-              </button>
-            </div>
-          ))}
+            ) : (
+              // 보기 모드 (일관된 표시)
+              <div className="phrase-item" key={p.id}>
+                <div style={{ minWidth: 0 }}>
+                  <div className="p-text">
+                    {p.text}
+                    {p.note && (
+                      <span style={{ color: 'var(--faint)', fontWeight: 400 }}> {p.note}</span>
+                    )}
+                  </div>
+                  {p.meaning && <div className="p-meaning">{p.meaning}</div>}
+                  {p.explanation && (
+                    <div className="p-sub">💡 {p.explanation}</div>
+                  )}
+                  {p.example && (
+                    <div className="p-sub" style={{ fontFamily: 'var(--mono)' }}>📝 {p.example}</div>
+                  )}
+                </div>
+                <button className="btn sm ghost" onClick={() => setEditingId(p.id)}>
+                  수정
+                </button>
+              </div>
+            ),
+          )}
 
           <div style={{ padding: 14, borderTop: '1px solid var(--border)' }}>
-            <div className="row" style={{ marginBottom: 8 }}>
-              <input
-                className="input"
-                placeholder="영어 구문 (예: end up -ing)"
-                value={d(cat.id).text}
-                onChange={(e) => setD(cat.id, { text: e.target.value })}
-                style={{ flex: 2, minWidth: 160 }}
-              />
-              <input
-                className="input"
-                placeholder="뜻 (예: 결국 ~하게 되다)"
-                value={d(cat.id).meaning}
-                onChange={(e) => setD(cat.id, { meaning: e.target.value })}
-                style={{ flex: 2, minWidth: 140 }}
-              />
-            </div>
+            <div className="section-label" style={{ marginBottom: 8 }}>구문 직접 추가</div>
+            <input
+              className="input"
+              placeholder="구문 (예: end up -ing)"
+              value={d(cat.id).text}
+              onChange={(e) => setD(cat.id, { text: e.target.value })}
+              style={{ marginBottom: 6, fontFamily: 'var(--mono)' }}
+            />
+            <input
+              className="input"
+              placeholder="뜻 (예: 결국 ~하게 되다)"
+              value={d(cat.id).meaning}
+              onChange={(e) => setD(cat.id, { meaning: e.target.value })}
+              style={{ marginBottom: 6 }}
+            />
+            <textarea
+              className="input"
+              rows={2}
+              placeholder="영어식 풀이 (선택)"
+              value={d(cat.id).explanation}
+              onChange={(e) => setD(cat.id, { explanation: e.target.value })}
+              style={{ marginBottom: 6, resize: 'vertical', fontSize: 13 }}
+            />
             <div className="row">
               <input
                 className="input"
-                placeholder="노트 (선택) 예: (+ 동사원형)"
-                value={d(cat.id).note}
-                onChange={(e) => setD(cat.id, { note: e.target.value })}
+                placeholder="예문 (선택)"
+                value={d(cat.id).example}
+                onChange={(e) => setD(cat.id, { example: e.target.value })}
                 style={{ flex: 1 }}
               />
-              <button className="btn" onClick={() => addPhrase(cat.id)}>
-                구문 추가
+              <button className="btn primary" onClick={() => addPhrase(cat.id)}>
+                추가
               </button>
             </div>
           </div>
