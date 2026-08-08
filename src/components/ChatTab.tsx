@@ -11,6 +11,7 @@ import type {
 import { newId } from '../store';
 import { focusTurn, freeTurn, friendlyError, type Turn } from '../lib/gemini';
 import { synthCloudBuffer } from '../lib/cloudtts';
+import { speakBrowser, stopBrowser, browserTtsSupported } from '../lib/browsertts';
 import { catHue } from '../lib/ui';
 import PhraseCombobox from './PhraseCombobox';
 import { isSpeechRecognitionSupported, startRecognition, type Recognizer } from '../lib/speech';
@@ -259,6 +260,7 @@ export default function ChatTab({
   const audioPrimedRef = useRef(false);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const srcNodeRef = useRef<AudioBufferSourceNode | null>(null);
+  const fallbackNotedRef = useRef(false); // 브라우저 음성 대체 안내를 세션당 1회만
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const turnsRef = useRef<Turn[]>([]);
 
@@ -375,7 +377,24 @@ export default function ChatTab({
     }
     srcNodeRef.current = null;
     audioRef.current?.pause();
+    stopBrowser();
     setSpeakingId(null);
+  };
+
+  // 클라우드 실패 시 브라우저 내장 음성으로 대체 재생
+  const playBrowser = (text: string, id: string): boolean => {
+    setSpeakingId(id);
+    const ok = speakBrowser(text, () => setSpeakingId((cur) => (cur === id ? null : cur)));
+    if (!ok) setSpeakingId(null);
+    return ok;
+  };
+  const noteFallbackOnce = () => {
+    if (fallbackNotedRef.current) return;
+    fallbackNotedRef.current = true;
+    push({
+      role: 'model',
+      text: '🔊 무료 음성 한도를 다 써서 브라우저 내장 음성으로 대체해 재생해요. (내일 한도가 초기화되면 원래 음성으로 돌아와요)',
+    });
   };
 
   // 페이지 어디든 첫 사용자 제스처에서 미리 잠금해제
@@ -460,8 +479,13 @@ export default function ChatTab({
       );
       await playBytes(bytes, id);
     } catch (e) {
-      setSpeakingId(null);
-      push({ role: 'model', text: `🔊 음성 재생 실패: ${friendlyError(e)}` });
+      // 클라우드 실패(한도 429 등) → 브라우저 내장 음성으로 대체
+      if (browserTtsSupported() && playBrowser(text, id)) {
+        noteFallbackOnce();
+      } else {
+        setSpeakingId(null);
+        push({ role: 'model', text: `🔊 음성 재생 실패: ${friendlyError(e)}` });
+      }
     }
   };
 
@@ -473,6 +497,7 @@ export default function ChatTab({
   ) => {
     if (!settings.autoSpeak || !ttsText || !settings.ttsUrl) return push(data);
     let bytes: ArrayBuffer | null = null;
+    let failed = false;
     try {
       bytes = await synthCloudBuffer(
         settings.ttsUrl,
@@ -482,10 +507,15 @@ export default function ChatTab({
         settings.ttsModel,
       );
     } catch {
-      /* 합성 실패 시 텍스트만 노출 */
+      failed = true; // 한도 초과 등 → 브라우저 음성으로 대체
     }
     const msg = push(data);
-    if (bytes) await playBytes(bytes, `${msg.id}:${suffix}`);
+    const id = `${msg.id}:${suffix}`;
+    if (bytes) {
+      await playBytes(bytes, id);
+    } else if (failed && browserTtsSupported()) {
+      if (playBrowser(ttsText, id)) noteFallbackOnce();
+    }
     return msg;
   };
 
