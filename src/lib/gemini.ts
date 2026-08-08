@@ -95,7 +95,7 @@ const focusSystem = (p: Phrase, studyWords: string[]) => `You are a warm, engagi
 You drill ONE target phrase through NATURAL BACK-AND-FORTH CONVERSATION until the learner can use it automatically.
 
 TARGET PHRASE: "${p.text}"
-MEANING (Korean): ${p.meaning}${p.note ? ` ${p.note}` : ''}
+MEANING (Korean): ${p.meaning}${p.note ? ` ${p.note}` : ''}${p.explanation ? `\nNOTE (how it's used): ${p.explanation}` : ''}
 
 Every turn return JSON:
 - "feedback": a very short Korean reaction to the learner's previous answer (e.g. "좋아요!", "거의 다 왔어요"). On the FIRST turn (no answer yet), a one-line friendly Korean greeting.

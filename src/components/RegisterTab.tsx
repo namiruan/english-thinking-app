@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Category } from '../types';
+import type { Category, Phrase } from '../types';
 import { newId } from '../store';
 
 interface Props {
@@ -32,22 +32,60 @@ export default function RegisterTab({
     setNewCat('');
   };
 
-  // 붙여넣기 가져오기: "영어 | 한국어 뜻" (또는 탭) 한 줄씩
+  // 붙여넣기 가져오기: 빈 줄로 항목 구분, 항목 안에서 라벨(구문/뜻/풀이/예문)로 분리.
+  // 라벨이 없으면 "영어 | 한국어" 한 줄 형식도 지원.
   const importPhrases = () => {
-    const lines = importText
-      .split('\n')
-      .map((l) => l.trim())
+    const blocks = importText
+      .split(/\n\s*\n/)
+      .map((b) => b.trim())
       .filter(Boolean);
-    const phrases = lines
-      .map((line) => {
-        const parts = line.split(/\s*[|\t]\s*/);
-        const text = (parts[0] || '').trim();
-        const meaning = (parts[1] || '').trim();
-        return text ? { id: newId(), text, meaning } : null;
-      })
-      .filter((p): p is { id: string; text: string; meaning: string } => !!p);
+
+    const phrases: Phrase[] = [];
+    for (const block of blocks) {
+      const lines = block.split('\n').map((l) => l.trim()).filter(Boolean);
+      let text = '';
+      let meaning = '';
+      let explanation = '';
+      let example = '';
+      let cur: 'text' | 'meaning' | 'explanation' | 'example' | null = null;
+
+      for (const line of lines) {
+        const m = line.match(/^(구문|문장|뜻|의미|풀이|해설|예문|example|meaning)\s*[:：]\s*(.*)$/i);
+        if (m) {
+          const label = m[1].toLowerCase();
+          const val = m[2].trim();
+          if (/구문|문장/.test(label)) (text = val), (cur = 'text');
+          else if (/뜻|의미|meaning/.test(label)) (meaning = val), (cur = 'meaning');
+          else if (/풀이|해설/.test(label)) (explanation = val), (cur = 'explanation');
+          else if (/예문|example/i.test(label)) (example = val), (cur = 'example');
+        } else if (cur) {
+          // 라벨 이후 이어지는 줄 → 이어붙이기
+          if (cur === 'text') text += (text ? '\n' : '') + line;
+          else if (cur === 'meaning') meaning += (meaning ? '\n' : '') + line;
+          else if (cur === 'explanation') explanation += (explanation ? '\n' : '') + line;
+          else example += (example ? '\n' : '') + line;
+        } else {
+          // 라벨 없음 → "영어 | 뜻" 시도
+          const parts = line.split(/\s*[|\t]\s*/);
+          if (!text) {
+            text = (parts[0] || '').trim();
+            if (parts[1]) meaning = parts[1].trim();
+          }
+        }
+      }
+      if (text) {
+        phrases.push({
+          id: newId(),
+          text,
+          meaning,
+          ...(explanation ? { explanation } : {}),
+          ...(example ? { example } : {}),
+        });
+      }
+    }
+
     if (phrases.length === 0) {
-      setImportMsg('가져올 문장이 없어요. "영어 | 한국어" 형식으로 붙여넣어 주세요.');
+      setImportMsg('가져올 문장이 없어요. 아래 형식을 확인해 주세요.');
       return;
     }
     const cat: Category = { id: newId(), name: importName.trim() || '가져온 문장', phrases };
@@ -55,7 +93,7 @@ export default function RegisterTab({
     setActiveCatId(cat.id);
     setImportText('');
     setImportName('');
-    setImportMsg(`✓ ${phrases.length}개 문장을 "${cat.name}" 카테고리로 등록했어요.`);
+    setImportMsg(`✓ ${phrases.length}개 항목을 "${cat.name}" 카테고리로 등록했어요.`);
   };
 
   const addPhrase = (catId: string) => {
@@ -125,8 +163,8 @@ export default function RegisterTab({
       <div className="card" style={{ padding: 16, marginBottom: 16 }}>
         <div className="section-label">가져오기 (붙여넣기)</div>
         <p className="hint" style={{ margin: '0 0 10px' }}>
-          문장을 한 줄에 하나씩, <code>영어 | 한국어 뜻</code> 형식으로 붙여넣으세요. (이 기기에만
-          저장 · 비공개로 하려면 설정에서 암호화 저장)
+          항목마다 <b>빈 줄</b>로 구분하고, 각 항목 안에 라벨을 붙여 넣으세요. <code>구문</code>은
+          필수, <code>풀이·예문</code>은 선택. (간단히 <code>영어 | 뜻</code> 한 줄도 가능)
         </p>
         <input
           className="input"
@@ -137,8 +175,10 @@ export default function RegisterTab({
         />
         <textarea
           className="input"
-          rows={5}
-          placeholder={'I have no idea. | 전혀 모르겠어.\nIt is what it is. | 어쩔 수 없지.'}
+          rows={7}
+          placeholder={
+            '구문: ...\n뜻: ...\n풀이: ...\n예문: ...\n\n구문: ...\n뜻: ...\n\n(또는)\nEnglish sentence | 한국어 뜻'
+          }
           value={importText}
           onChange={(e) => setImportText(e.target.value)}
           style={{ resize: 'vertical', fontFamily: 'var(--mono)', fontSize: 12.5 }}
@@ -184,6 +224,16 @@ export default function RegisterTab({
                   {p.note && <span className="target-note" style={{ color: 'var(--faint)', fontWeight: 400 }}> {p.note}</span>}
                 </div>
                 <div className="p-meaning">{p.meaning}</div>
+                {p.explanation && (
+                  <div className="p-meaning" style={{ color: 'var(--faint)', marginTop: 3 }}>
+                    💡 {p.explanation}
+                  </div>
+                )}
+                {p.example && (
+                  <div className="p-meaning" style={{ color: 'var(--faint)', marginTop: 2, fontFamily: 'var(--mono)' }}>
+                    📝 {p.example}
+                  </div>
+                )}
               </div>
               <button className="btn sm ghost danger" onClick={() => removePhrase(cat.id, p.id)}>
                 ✕

@@ -1,7 +1,9 @@
 export interface Phrase {
   id: string;
-  text: string; // 예: "be starting to like"
+  text: string; // 구문 (배울 문장/패턴, 예: "be starting to like")
   meaning: string; // 한국어 뜻
+  explanation?: string; // 영어식 풀이
+  example?: string; // 예문
   note?: string; // 사용 노트, 예: "(+ 동사원형도 가능)"
 }
 
