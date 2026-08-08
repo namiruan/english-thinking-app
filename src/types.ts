@@ -81,6 +81,7 @@ export interface Settings {
   model?: string; // 대화/사전 모델 (기본 gemini-2.5-flash)
   voiceEngine?: 'gemini' | 'browser'; // 음성 엔진 (기본 gemini)
   voice: string; // Gemini TTS 음성 이름
+  browserVoice?: string; // 브라우저 음성 이름 (선택)
   autoSpeak: boolean; // AI 응답 자동 재생
   github?: GitHubConfig; // 앱에서 GitHub에 바로 저장할 때 사용
 }

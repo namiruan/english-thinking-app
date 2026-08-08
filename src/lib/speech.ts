@@ -61,18 +61,70 @@ export function startRecognition(
 // ── 브라우저 내장 음성 합성 (무료·무제한) ──────────────
 export const isSpeechSynthesisSupported = () => 'speechSynthesis' in window;
 
+// 고품질 목소리로 추정되는 이름 힌트
+const QUALITY_HINTS = [
+  'natural',
+  'neural',
+  'enhanced',
+  'premium',
+  'google',
+  'siri',
+  'ava',
+  'samantha',
+  'aria',
+  'jenny',
+  'libby',
+  'serena',
+];
+
+function scoreVoice(v: SpeechSynthesisVoice): number {
+  const n = v.name.toLowerCase();
+  const lang = v.lang.toLowerCase();
+  let s = 0;
+  if (QUALITY_HINTS.some((h) => n.includes(h))) s += 3;
+  if (lang.startsWith('en-us')) s += 2;
+  else if (lang.startsWith('en')) s += 1;
+  if (!v.localService) s += 1; // 클라우드 음성(구글 등)이 대체로 자연스러움
+  return s;
+}
+
+/** 사용 가능한 영어 음성 (품질 추정 높은 순) */
+export function listEnglishVoices(): SpeechSynthesisVoice[] {
+  const synth = window.speechSynthesis;
+  if (!synth) return [];
+  return synth
+    .getVoices()
+    .filter((v) => v.lang.toLowerCase().startsWith('en'))
+    .sort((a, b) => scoreVoice(b) - scoreVoice(a));
+}
+
+/** 음성 목록이 늦게 로드되는 브라우저 대응 */
+export function onVoicesChanged(cb: () => void): () => void {
+  const synth = window.speechSynthesis;
+  if (!synth) return () => {};
+  const handler = () => cb();
+  synth.addEventListener('voiceschanged', handler);
+  return () => synth.removeEventListener('voiceschanged', handler);
+}
+
 /** 브라우저 TTS로 재생. onEnd는 끝나거나 실패 시 호출. */
-export function speakBrowser(text: string, onEnd: () => void, lang = 'en-US') {
+export function speakBrowser(
+  text: string,
+  onEnd: () => void,
+  opts: { voiceName?: string; lang?: string } = {},
+) {
   const synth = window.speechSynthesis;
   if (!synth) {
     onEnd();
     return;
   }
   synth.cancel();
+  const voices = listEnglishVoices();
+  const chosen =
+    (opts.voiceName && voices.find((v) => v.name === opts.voiceName)) || voices[0] || undefined;
   const u = new SpeechSynthesisUtterance(text);
-  u.lang = lang;
-  const voice = synth.getVoices().find((v) => v.lang.startsWith('en'));
-  if (voice) u.voice = voice;
+  u.lang = chosen?.lang || opts.lang || 'en-US';
+  if (chosen) u.voice = chosen;
   u.onend = onEnd;
   u.onerror = onEnd;
   synth.speak(u);

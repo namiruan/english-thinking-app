@@ -312,7 +312,9 @@ export default function ChatTab({
     // 브라우저 음성: API 호출 없이 즉시 재생 (무료·무제한)
     if (voiceEngine === 'browser') {
       setSpeakingId(id);
-      speakBrowser(text, () => setSpeakingId((cur) => (cur === id ? null : cur)));
+      speakBrowser(text, () => setSpeakingId((cur) => (cur === id ? null : cur)), {
+        voiceName: settings.browserVoice,
+      });
       return;
     }
     if (!settings.apiKey) return;

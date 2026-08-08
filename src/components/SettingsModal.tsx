@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { Category, GitHubConfig, Settings } from '../types';
 import { TTS_VOICES, CHAT_MODELS } from '../lib/gemini';
+import { listEnglishVoices, onVoicesChanged, speakBrowser } from '../lib/speech';
 import { encryptSecret, type EncryptedBlob } from '../lib/crypto';
 import { buildVaultJson } from '../lib/vault';
 import { commitFile } from '../lib/github';
@@ -38,6 +39,12 @@ export default function SettingsModal({
     ...settings,
     github: settings.github ?? defaultGitHub,
   });
+
+  const [browserVoices, setBrowserVoices] = useState(() => listEnglishVoices());
+  useEffect(() => {
+    setBrowserVoices(listEnglishVoices());
+    return onVoicesChanged(() => setBrowserVoices(listEnglishVoices()));
+  }, []);
 
   // vault 생성용
   const [expKey, setExpKey] = useState(settings.apiKey || '');
@@ -207,6 +214,43 @@ export default function SettingsModal({
                 </option>
               ))}
             </select>
+          </div>
+        )}
+
+        {(draft.voiceEngine ?? 'gemini') === 'browser' && (
+          <div className="field">
+            <label>브라우저 음성 선택</label>
+            <div className="row" style={{ gap: 8 }}>
+              <select
+                className="select"
+                style={{ flex: 1 }}
+                value={draft.browserVoice ?? ''}
+                onChange={(e) => setDraft({ ...draft, browserVoice: e.target.value || undefined })}
+              >
+                <option value="">자동 (가장 좋은 음성)</option>
+                {browserVoices.map((v) => (
+                  <option key={v.name} value={v.name}>
+                    {v.name} ({v.lang})
+                  </option>
+                ))}
+              </select>
+              <button
+                className="btn"
+                type="button"
+                onClick={() =>
+                  speakBrowser("I'm starting to like this app.", () => {}, {
+                    voiceName: draft.browserVoice,
+                  })
+                }
+              >
+                ▶ 미리듣기
+              </button>
+            </div>
+            <p className="hint" style={{ margin: '6px 0 0' }}>
+              {browserVoices.length === 0
+                ? '음성 목록을 불러오는 중… (Chrome/Edge에서 목소리가 더 다양해요)'
+                : '"Google / Natural / Enhanced" 이름이 보통 더 자연스러워요. 무료·무제한이에요.'}
+            </p>
           </div>
         )}
 
