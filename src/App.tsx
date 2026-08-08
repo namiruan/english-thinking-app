@@ -141,6 +141,8 @@ export default function App() {
               setCategories={setCategories}
               activeCatId={activeCat?.id ?? ''}
               setActiveCatId={setActiveCatId}
+              apiKey={effectiveKey}
+              model={effectiveSettings.model?.trim() || 'gemini-3.5-flash-lite'}
             />
           )}
 

@@ -1,12 +1,15 @@
 import { useState } from 'react';
 import type { Category, Phrase } from '../types';
 import { newId } from '../store';
+import { lookupTerm } from '../lib/gemini';
 
 interface Props {
   categories: Category[];
   setCategories: React.Dispatch<React.SetStateAction<Category[]>>;
   activeCatId: string;
   setActiveCatId: (id: string) => void;
+  apiKey?: string;
+  model?: string;
 }
 
 export default function RegisterTab({
@@ -14,6 +17,8 @@ export default function RegisterTab({
   setCategories,
   activeCatId,
   setActiveCatId,
+  apiKey,
+  model,
 }: Props) {
   const [newCat, setNewCat] = useState('');
   const [draft, setDraft] = useState<Record<string, { text: string; meaning: string; note: string }>>(
@@ -22,6 +27,8 @@ export default function RegisterTab({
   const [importName, setImportName] = useState('');
   const [importText, setImportText] = useState('');
   const [importMsg, setImportMsg] = useState('');
+  const [importBusy, setImportBusy] = useState(false);
+  const [autoFill, setAutoFill] = useState(true);
 
   const addCategory = () => {
     const name = newCat.trim();
@@ -32,60 +39,62 @@ export default function RegisterTab({
     setNewCat('');
   };
 
-  // 붙여넣기 가져오기: 빈 줄로 항목 구분, 항목 안에서 라벨(구문/뜻/풀이/예문)로 분리.
-  // 라벨이 없으면 "영어 | 한국어" 한 줄 형식도 지원.
-  const importPhrases = () => {
-    const blocks = importText
-      .split(/\n\s*\n/)
-      .map((b) => b.trim())
-      .filter(Boolean);
-
-    const phrases: Phrase[] = [];
+  // 붙여넣기 파싱: 빈 줄로 항목 구분.
+  // - 라벨(구문/뜻/풀이/예문)이 있으면 그걸 사용
+  // - 없으면 "Think in English" 설명문으로 보고 "" 안 = 구문, 문단 = 풀이
+  // - "영어 | 뜻" 한 줄 단축도 지원
+  const parseBlocks = (raw: string): Phrase[] => {
+    const blocks = raw.split(/\n\s*\n/).map((b) => b.trim()).filter(Boolean);
+    const out: Phrase[] = [];
     for (const block of blocks) {
       const lines = block.split('\n').map((l) => l.trim()).filter(Boolean);
-      let text = '';
-      let meaning = '';
-      let explanation = '';
-      let example = '';
-      let cur: 'text' | 'meaning' | 'explanation' | 'example' | null = null;
+      const hasLabel = lines.some((l) =>
+        /^(구문|문장|뜻|의미|풀이|해설|예문|example|meaning)\s*[:：]/i.test(l),
+      );
 
-      for (const line of lines) {
-        const m = line.match(/^(구문|문장|뜻|의미|풀이|해설|예문|example|meaning)\s*[:：]\s*(.*)$/i);
-        if (m) {
-          const label = m[1].toLowerCase();
-          const val = m[2].trim();
-          if (/구문|문장/.test(label)) (text = val), (cur = 'text');
-          else if (/뜻|의미|meaning/.test(label)) (meaning = val), (cur = 'meaning');
-          else if (/풀이|해설/.test(label)) (explanation = val), (cur = 'explanation');
-          else if (/예문|example/i.test(label)) (example = val), (cur = 'example');
-        } else if (cur) {
-          // 라벨 이후 이어지는 줄 → 이어붙이기
-          if (cur === 'text') text += (text ? '\n' : '') + line;
+      if (hasLabel) {
+        let text = '';
+        let meaning = '';
+        let explanation = '';
+        let example = '';
+        let cur: 'text' | 'meaning' | 'explanation' | 'example' | null = null;
+        for (const line of lines) {
+          const m = line.match(/^(구문|문장|뜻|의미|풀이|해설|예문|example|meaning)\s*[:：]\s*(.*)$/i);
+          if (m) {
+            const label = m[1].toLowerCase();
+            const val = m[2].trim();
+            if (/구문|문장/.test(label)) (text = val), (cur = 'text');
+            else if (/뜻|의미|meaning/.test(label)) (meaning = val), (cur = 'meaning');
+            else if (/풀이|해설/.test(label)) (explanation = val), (cur = 'explanation');
+            else (example = val), (cur = 'example');
+          } else if (cur === 'text') text += (text ? '\n' : '') + line;
           else if (cur === 'meaning') meaning += (meaning ? '\n' : '') + line;
           else if (cur === 'explanation') explanation += (explanation ? '\n' : '') + line;
-          else example += (example ? '\n' : '') + line;
-        } else {
-          // 라벨 없음 → "영어 | 뜻" 시도
-          const parts = line.split(/\s*[|\t]\s*/);
-          if (!text) {
-            text = (parts[0] || '').trim();
-            if (parts[1]) meaning = parts[1].trim();
-          }
+          else if (cur === 'example') example += (example ? '\n' : '') + line;
+        }
+        if (text) {
+          out.push({ id: newId(), text, meaning, ...(explanation ? { explanation } : {}), ...(example ? { example } : {}) });
+        }
+      } else {
+        // 라벨 없음
+        const quoted = block.match(/["“”]([^"“”]+)["“”]/); // "" 안의 배울 구문
+        const pipe = block.split(/\s*[|\t]\s*/);
+        if (quoted) {
+          out.push({ id: newId(), text: quoted[1].trim(), meaning: '', explanation: block });
+        } else if (pipe.length >= 2) {
+          out.push({ id: newId(), text: pipe[0].trim(), meaning: pipe[1].trim() });
+        } else if (block) {
+          out.push({ id: newId(), text: block.split('\n')[0].trim(), meaning: '' });
         }
       }
-      if (text) {
-        phrases.push({
-          id: newId(),
-          text,
-          meaning,
-          ...(explanation ? { explanation } : {}),
-          ...(example ? { example } : {}),
-        });
-      }
     }
+    return out;
+  };
 
+  const importPhrases = async () => {
+    const phrases = parseBlocks(importText);
     if (phrases.length === 0) {
-      setImportMsg('가져올 문장이 없어요. 아래 형식을 확인해 주세요.');
+      setImportMsg('가져올 문장이 없어요. "" 안에 배울 구문이 있는지 확인해 주세요.');
       return;
     }
     const cat: Category = { id: newId(), name: importName.trim() || '가져온 문장', phrases };
@@ -93,6 +102,27 @@ export default function RegisterTab({
     setActiveCatId(cat.id);
     setImportText('');
     setImportName('');
+
+    if (autoFill && apiKey && phrases.some((p) => !p.meaning)) {
+      setImportBusy(true);
+      setImportMsg(`✓ ${phrases.length}개 등록. 뜻을 채우는 중…`);
+      for (const p of phrases) {
+        if (p.meaning) continue;
+        try {
+          const r = await lookupTerm(apiKey, p.text, model);
+          setCategories((prev) =>
+            prev.map((c) =>
+              c.id === cat.id
+                ? { ...c, phrases: c.phrases.map((x) => (x.id === p.id ? { ...x, meaning: r.korean } : x)) }
+                : c,
+            ),
+          );
+        } catch {
+          /* 뜻 자동 채우기 실패는 건너뜀 */
+        }
+      }
+      setImportBusy(false);
+    }
     setImportMsg(`✓ ${phrases.length}개 항목을 "${cat.name}" 카테고리로 등록했어요.`);
   };
 
@@ -163,8 +193,8 @@ export default function RegisterTab({
       <div className="card" style={{ padding: 16, marginBottom: 16 }}>
         <div className="section-label">가져오기 (붙여넣기)</div>
         <p className="hint" style={{ margin: '0 0 10px' }}>
-          항목마다 <b>빈 줄</b>로 구분하고, 각 항목 안에 라벨을 붙여 넣으세요. <code>구문</code>은
-          필수, <code>풀이·예문</code>은 선택. (간단히 <code>영어 | 뜻</code> 한 줄도 가능)
+          "Think in English" 설명문을 그대로 붙여넣으세요. <b>"" 안의 표현 = 배울 구문</b>, 문단
+          전체 = 영어 풀이로 저장돼요. 뜻은 AI가 자동으로 채워줍니다. 여러 개면 <b>빈 줄</b>로 구분.
         </p>
         <input
           className="input"
@@ -177,15 +207,19 @@ export default function RegisterTab({
           className="input"
           rows={7}
           placeholder={
-            '구문: ...\n뜻: ...\n풀이: ...\n예문: ...\n\n구문: ...\n뜻: ...\n\n(또는)\nEnglish sentence | 한국어 뜻'
+            'When we say we "are starting to like" something, it means we are beginning to enjoy it...'
           }
           value={importText}
           onChange={(e) => setImportText(e.target.value)}
-          style={{ resize: 'vertical', fontFamily: 'var(--mono)', fontSize: 12.5 }}
+          style={{ resize: 'vertical', fontSize: 13 }}
         />
+        <label className="toggle" style={{ marginTop: 8 }}>
+          <input type="checkbox" checked={autoFill} onChange={(e) => setAutoFill(e.target.checked)} />
+          뜻 자동 채우기 (AI)
+        </label>
         <div className="row" style={{ marginTop: 8 }}>
-          <button className="btn primary" onClick={importPhrases}>
-            가져오기
+          <button className="btn primary" onClick={importPhrases} disabled={importBusy}>
+            {importBusy ? <span className="spinner" /> : '가져오기'}
           </button>
           {importMsg && (
             <span className="hint" style={{ color: importMsg.startsWith('✓') ? 'var(--good)' : 'var(--danger)' }}>
