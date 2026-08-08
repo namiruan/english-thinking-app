@@ -170,6 +170,10 @@ export default function RegisterTab({
     );
   };
 
+  const renameCategory = (catId: string, name: string) => {
+    setCategories((prev) => prev.map((c) => (c.id === catId ? { ...c, name } : c)));
+  };
+
   const removeCategory = (catId: string) => {
     if (!confirm('이 카테고리와 안의 구문을 모두 삭제할까요?')) return;
     setCategories((prev) => {
@@ -244,8 +248,14 @@ export default function RegisterTab({
       {categories.map((cat) => (
         <div className="card" key={cat.id} style={{ marginBottom: 16 }}>
           <div className="cat-head">
-            <div>
-              <div className="cat-name">{cat.name}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <input
+                className="cat-name-input"
+                value={cat.name}
+                onChange={(e) => renameCategory(cat.id, e.target.value)}
+                placeholder="카테고리 이름"
+                aria-label="카테고리 이름 수정"
+              />
               <div className="cat-count">{cat.phrases.length}개 구문</div>
             </div>
             <div className="row">
@@ -323,8 +333,13 @@ export default function RegisterTab({
                     <div className="p-sub" style={{ fontFamily: 'var(--mono)' }}>📝 {p.example}</div>
                   )}
                 </div>
-                <button className="btn sm ghost" onClick={() => setEditingId(p.id)}>
-                  수정
+                <button
+                  className="btn sm ghost"
+                  onClick={() => setEditingId(p.id)}
+                  title="수정"
+                  aria-label="수정"
+                >
+                  ✏️
                 </button>
               </div>
             ),

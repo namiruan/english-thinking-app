@@ -675,6 +675,27 @@ textarea.input:focus {
   font-weight: 620;
   font-size: 14.5px;
 }
+.cat-name-input {
+  font-weight: 620;
+  font-size: 14.5px;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 3px 6px;
+  margin: -3px -6px 0;
+  width: 100%;
+  max-width: 100%;
+  outline: none;
+  transition: 0.15s;
+}
+.cat-name-input:hover {
+  border-color: var(--border);
+}
+.cat-name-input:focus {
+  border-color: var(--accent);
+  background: var(--surface);
+}
 .cat-count {
   font-size: 12px;
   color: var(--faint);
