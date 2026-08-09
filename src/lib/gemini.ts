@@ -6,10 +6,12 @@ const CHAT_MODEL = 'gemini-3.5-flash-lite';
 const TTS_MODEL = 'gemini-2.5-flash-preview-tts';
 
 // 설정에서 고를 수 있는 대화/사전 모델 (2026 기준)
+// 무료 한도: Flash-Lite(15 RPM·하루 ~1,000+) > Flash(10 RPM·하루 250)
 export const CHAT_MODELS = [
-  { id: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash-Lite · 빠름·한도 여유 (권장)' },
-  { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash · 고품질' },
-  { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash · 대체용' },
+  { id: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash-Lite · 무료 한도 최대 15RPM (권장)' },
+  { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite · 한도 여유 15RPM' },
+  { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash · 고품질 (한도 적음)' },
+  { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash · 고품질 10RPM' },
 ];
 
 function client(apiKey: string) {
