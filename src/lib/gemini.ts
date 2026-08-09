@@ -374,9 +374,11 @@ export function friendlyError(e: unknown): string {
   if (msg === 'NO_API_KEY') return 'API 키가 없어요. 우측 상단 "설정"에서 Gemini API 키를 입력해주세요.';
   if (msg === 'NO_TTS_URL') return '설정에서 클라우드 TTS 서버 주소를 입력해주세요.';
   if (/quota|rate|RESOURCE_EXHAUSTED|429/i.test(msg)) {
-    if (/per\s*day|perday|daily|GenerateRequestsPerDay|requests per day/i.test(msg))
+    const m = msg.match(/retryDelay["':\s]+(\d+)\s*s/i);
+    const secs = m ? parseInt(m[1], 10) : 0;
+    if (/per\s*day|perday|daily|requests per day/i.test(msg) || secs > 120)
       return '오늘 이 모델의 무료 일일 한도를 다 썼어요. (미국 태평양시 자정에 초기화) 설정 → "대화·사전 모델"에서 다른 모델로 바꾸면 계속 쓸 수 있어요.';
-    return '요청이 잠깐 몰렸어요(분당 한도). 약 1분 후 다시 시도하거나, 설정에서 다른 모델로 바꿔보세요.';
+    return `요청이 잠깐 몰렸어요(분당 한도). ${secs ? `약 ${secs}초 후` : '약 1분 후'} 다시 시도하거나, 설정에서 다른 모델로 바꿔보세요.`;
   }
   if (/API key not valid|401|403|PERMISSION/i.test(msg))
     return 'API 키가 유효하지 않아요. 설정에서 키를 다시 확인해주세요.';
