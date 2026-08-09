@@ -979,6 +979,54 @@ textarea.input:focus {
   background: var(--accent);
   border-radius: 999px;
 }
+/* 구문별 숙련도 — 컴팩트 카드 격자 */
+.mastery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px;
+}
+.mastery-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+.mastery-card .m-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.mastery-card .m-text {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mastery-card .m-check {
+  color: var(--good);
+  flex: none;
+  font-size: 12px;
+}
+.mastery-card .m-bar {
+  margin-top: 7px;
+  height: 5px;
+  background: var(--surface-2);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.mastery-card .m-bar span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+}
+.mastery-card .m-meta {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--faint);
+}
 .grammar-notes {
   display: flex;
   flex-wrap: wrap;

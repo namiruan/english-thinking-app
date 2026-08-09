@@ -43,18 +43,27 @@ function mastery(text: string, clean: number, attempts: number): PhraseStat {
   return { text, clean, attempts, rate, pct, mastered, label, tone };
 }
 
-function PhraseRow({ p }: { p: PhraseStat }) {
+function PhraseCard({ p }: { p: PhraseStat }) {
+  const barColor = p.mastered
+    ? 'var(--good)'
+    : p.rate >= 0.5
+      ? 'var(--accent)'
+      : 'var(--border-strong)';
   return (
-    <div className="grammar-item">
-      <div className="grammar-top">
-        <span className="grammar-cat" style={{ fontFamily: 'var(--mono)' }}>{p.text}</span>
-        <span className={`chip ${p.tone}`}>{p.label}</span>
+    <div className="mastery-card">
+      <div className="m-head">
+        <span className="m-text" title={p.text}>{p.text}</span>
+        {p.mastered ? (
+          <span className="m-check">✓</span>
+        ) : (
+          p.attempts < MIN_ATTEMPTS && <span className="m-check" style={{ color: 'var(--faint)' }}>{p.attempts}/{MIN_ATTEMPTS}</span>
+        )}
       </div>
-      <div className="grammar-bar">
-        <span style={{ width: `${p.pct}%`, background: p.mastered ? 'var(--good)' : 'var(--accent)' }} />
+      <div className="m-bar">
+        <span style={{ width: `${p.pct}%`, background: barColor }} />
       </div>
-      <div className="grammar-ex" style={{ fontFamily: 'var(--sans)' }}>
-        성공률 {p.pct}% · 정확 {p.clean}/{p.attempts}
+      <div className="m-meta">
+        {p.pct}% · {p.clean}/{p.attempts}회
       </div>
     </div>
   );
@@ -153,9 +162,9 @@ export default function HistoryTab({ progress, clearProgress, grammarStats, clea
           </div>
 
           {learning.length > 0 ? (
-            <div className="card">
+            <div className="mastery-grid">
               {learning.map((p) => (
-                <PhraseRow key={p.text} p={p} />
+                <PhraseCard key={p.text} p={p} />
               ))}
             </div>
           ) : (
@@ -175,9 +184,9 @@ export default function HistoryTab({ progress, clearProgress, grammarStats, clea
                 {showMastered ? '숨기기' : '보기'}
               </button>
               {showMastered && (
-                <div className="card" style={{ marginTop: 8 }}>
+                <div className="mastery-grid" style={{ marginTop: 8 }}>
                   {mastered.map((p) => (
-                    <PhraseRow key={p.text} p={p} />
+                    <PhraseCard key={p.text} p={p} />
                   ))}
                 </div>
               )}
