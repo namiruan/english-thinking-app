@@ -347,7 +347,8 @@ export default function App() {
       )}
 
       <footer className="footer">
-        영어식 사고 · Gemini 2.5 Flash + Native Audio TTS · git 저장
+        영어식 사고 · {effectiveSettings.model?.trim() || 'gemini-3.5-flash-lite'} ·{' '}
+        {effectiveSettings.ttsEngine === 'google' ? 'Google 음성' : 'Cloudflare 음성'} · 자동 동기화
       </footer>
 
       {toasts.length > 0 && (
