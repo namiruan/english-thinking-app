@@ -22,6 +22,7 @@ import UnlockModal, { type UnlockResult } from './components/UnlockModal';
 import SelectionLookup from './components/SelectionLookup';
 
 const REMEMBER_PW_KEY = 'et.rememberedPw';
+const LOCAL_AT_KEY = 'et.localAt'; // 로컬 마지막 변경 시각(ms) — 동기화 최신 판단
 type SyncStatus = 'off' | 'idle' | 'syncing' | 'synced' | 'error';
 
 type Tab = 'register' | 'chat' | 'history' | 'wordbook';
@@ -171,9 +172,21 @@ export default function App() {
   const handleUnlock = (res: UnlockResult, password: string) => {
     setSessionPassword(password);
     if (res.data) {
-      hydrate(res.data);
-      if (res.data.settings?.apiKey) setSessionKey(res.data.settings.apiKey);
-      setSyncStatus(res.data.settings?.github?.token ? 'idle' : 'off');
+      // 로컬이 더 최신이면(아직 push 안 됐거나 Pages 반영 전) vault로 덮어쓰지 않음
+      const localAt = Number(localStorage.getItem(LOCAL_AT_KEY) || 0);
+      const vaultAt = Number(res.data.updatedAt || 0);
+      if (!localAt || vaultAt >= localAt) {
+        hydrate(res.data);
+        localStorage.setItem(LOCAL_AT_KEY, String(vaultAt || Date.now()));
+        if (res.data.settings?.apiKey) setSessionKey(res.data.settings.apiKey);
+        setSyncStatus(res.data.settings?.github?.token ? 'idle' : 'off');
+      } else {
+        // 로컬 유지. 세션 키만 확보하고, 곧 로컬을 push 하도록 함.
+        if (res.data.settings?.apiKey) setSessionKey(res.data.settings.apiKey);
+        else if (settings.apiKey) setSessionKey(settings.apiKey);
+        setSyncStatus(settings.github?.token ? 'idle' : 'off');
+        lastSyncedHashRef.current = null;
+      }
     } else {
       if (res.apiKey) setSessionKey(res.apiKey);
       if (res.categories && res.categories.length) {
@@ -222,11 +235,14 @@ export default function App() {
     }
     const snap = snapshot(currentData);
     if (snap === lastSyncedHashRef.current) return; // 변경 없음
+    // 로컬 변경 발생 → 이 시점을 로컬 최신 시각으로 기록 (push 실패/재로딩 시에도 로컬 보존)
+    const ts = Date.now();
+    localStorage.setItem(LOCAL_AT_KEY, String(ts));
     const cfg = { ...defaultGitHub, ...gh };
     const t = setTimeout(async () => {
       setSyncStatus('syncing');
       try {
-        await pushVault(cfg, sessionPassword, currentData);
+        await pushVault(cfg, sessionPassword, currentData, ts);
         lastSyncedHashRef.current = snap;
         setSyncStatus('synced');
       } catch {
@@ -361,8 +377,11 @@ export default function App() {
       )}
 
       <footer className="footer">
-        영어식 사고 · {effectiveSettings.model?.trim() || 'gemini-3.5-flash-lite'} ·{' '}
-        {effectiveSettings.ttsEngine === 'google' ? 'Google 음성' : 'Cloudflare 음성'} · 자동 동기화
+        영어식 사고 ·{' '}
+        {effectiveSettings.chatEngine === 'groq'
+          ? `Groq (${effectiveSettings.groqModel || 'llama-3.3-70b-versatile'})`
+          : effectiveSettings.model?.trim() || 'gemini-3.5-flash-lite'}{' '}
+        · {effectiveSettings.ttsEngine === 'google' ? 'Google 음성' : 'Cloudflare 음성'} · 자동 동기화
       </footer>
 
       {toasts.length > 0 && (

@@ -12,6 +12,7 @@ export interface SyncData {
   progress: Progress;
   grammar: Record<string, GrammarStat>;
   settings: Settings; // apiKey·github(token)·tts 포함 (암호문으로만 저장됨)
+  updatedAt?: number; // 마지막 저장 시각(ms). 로컬이 더 최신이면 vault로 덮어쓰지 않음.
 }
 
 /** 항상 같은 키 순서로 직렬화 (스냅샷 비교/커밋 안정화) */
@@ -43,8 +44,11 @@ export async function pushVault(
   cfg: GitHubConfig,
   password: string,
   data: SyncData,
+  updatedAt: number,
 ): Promise<string> {
-  const dataEnc = await encryptData(data, password);
+  // updatedAt 을 함께 암호화 저장 → 다른 기기/재로딩 시 최신 여부 판단
+  const payload = { ...makeSyncData(data), updatedAt };
+  const dataEnc = await encryptSecret(JSON.stringify(payload), password);
   const apiKey = data.settings.apiKey?.trim();
   const secret = apiKey ? await encryptSecret(apiKey, password) : undefined;
   const content = buildVaultJson({ dataEnc, secret });

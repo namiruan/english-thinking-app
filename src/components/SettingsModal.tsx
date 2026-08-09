@@ -116,7 +116,9 @@ export default function SettingsModal({
       const data = buildFullData();
       const password = resolvePassword();
       onSave(data.settings); // 토큰·설정·API키 저장(브라우저)
-      const url = await pushVault({ ...defaultGitHub, ...gh }, password, data);
+      const ts = Date.now();
+      localStorage.setItem('et.localAt', String(ts));
+      const url = await pushVault({ ...defaultGitHub, ...gh }, password, data, ts);
       onSynced(password); // 세션 비번 유지 → 이후 자동 동기화
       setCommitUrl(url);
       setMsg('✅ GitHub에 저장했어요! 이제 변경할 때마다 자동으로 동기화돼요.');
