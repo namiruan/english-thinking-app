@@ -14,6 +14,17 @@ export const CHAT_MODELS = [
   { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash · 고품질 10RPM' },
 ];
 
+// 대화·사전 엔진 선택
+export const CHAT_ENGINES = [
+  { id: 'gemini', label: 'Gemini (Google)' },
+  { id: 'groq', label: 'Groq · 무료·빠름 (Llama)' },
+];
+// Groq 모델 (워커 경유)
+export const GROQ_MODELS = [
+  { id: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B · 고품질 (권장)' },
+  { id: 'llama-3.1-8b-instant', label: 'Llama 3.1 8B · 아주 빠름·한도 큼' },
+];
+
 function client(apiKey: string) {
   if (!apiKey) throw new Error('NO_API_KEY');
   return new GoogleGenAI({ apiKey });
@@ -44,6 +55,68 @@ export interface Turn {
 
 function toContents(turns: Turn[]) {
   return turns.map((t) => ({ role: t.role, parts: [{ text: t.text }] }));
+}
+
+// ── 대화 엔진 (Gemini 또는 Groq · 워커 경유) ──────────────
+export interface ChatConfig {
+  engine: 'gemini' | 'groq';
+  apiKey: string; // Gemini API 키
+  model: string; // Gemini 모델 id
+  workerUrl?: string; // Groq는 워커 경유 (TTS 워커 재사용)
+  secret?: string; // 워커 시크릿(선택)
+  groqModel?: string; // Groq 모델 id
+}
+
+/** 대화 엔진에 맞게 JSON 응답을 생성 (Gemini responseSchema / Groq json_object) */
+async function generateJSON(
+  cfg: ChatConfig,
+  systemPrompt: string,
+  contents: { role: 'user' | 'model'; parts: { text: string }[] }[],
+  temperature: number,
+  responseSchema: object,
+): Promise<Record<string, unknown>> {
+  if (cfg.engine === 'groq') {
+    if (!cfg.workerUrl) throw new Error('NO_TTS_URL');
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      ...contents.map((c) => ({
+        role: c.role === 'model' ? 'assistant' : 'user',
+        content: c.parts.map((p) => p.text).join('\n'),
+      })),
+    ];
+    const res = await fetch(cfg.workerUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(cfg.secret ? { 'X-Secret': cfg.secret } : {}) },
+      body: JSON.stringify({
+        kind: 'chat',
+        model: cfg.groqModel || 'llama-3.3-70b-versatile',
+        messages,
+        temperature,
+      }),
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => '');
+      throw new Error(`GROQ ${res.status}: ${detail}`.slice(0, 220));
+    }
+    const j = await res.json();
+    const text = j?.choices?.[0]?.message?.content ?? '{}';
+    return JSON.parse(text) as Record<string, unknown>;
+  }
+  // Gemini
+  const ai = client(cfg.apiKey);
+  const res = await withRetry(() =>
+    ai.models.generateContent({
+      model: cfg.model || CHAT_MODEL,
+      contents,
+      config: {
+        systemInstruction: systemPrompt,
+        responseMimeType: 'application/json',
+        responseSchema,
+        temperature,
+      },
+    }),
+  );
+  return JSON.parse(res.text ?? '{}') as Record<string, unknown>;
 }
 
 // 번역 원칙 (모든 번역 필드 공통)
@@ -157,32 +230,22 @@ const focusSchema = {
 };
 
 export async function focusTurn(
-  apiKey: string,
+  cfg: ChatConfig,
   phrase: Phrase,
   turns: Turn[],
   studyWords: string[] = [],
-  model: string = CHAT_MODEL,
 ): Promise<FocusResult> {
-  const ai = client(apiKey);
   const contents =
     turns.length === 0
       ? [{ role: 'user' as const, parts: [{ text: '연습을 시작해줘.' }] }]
       : toContents(turns);
-
-  const res = await withRetry(() =>
-    ai.models.generateContent({
-      model,
-      contents,
-      config: {
-        systemInstruction: focusSystem(phrase, studyWords),
-        responseMimeType: 'application/json',
-        responseSchema: focusSchema,
-        temperature: 0.9,
-      },
-    }),
-  );
-
-  const parsed = JSON.parse(res.text ?? '{}') as Partial<FocusResult>;
+  const parsed = (await generateJSON(
+    cfg,
+    focusSystem(phrase, studyWords),
+    contents,
+    0.9,
+    focusSchema,
+  )) as Partial<FocusResult>;
   return {
     feedback: parsed.feedback ?? '',
     clean: Boolean(parsed.clean),
@@ -234,31 +297,22 @@ const freeSchema = {
 };
 
 export async function freeTurn(
-  apiKey: string,
+  cfg: ChatConfig,
   phrases: Phrase[],
   turns: Turn[],
   studyWords: string[] = [],
-  model: string = CHAT_MODEL,
 ): Promise<FreeResult> {
-  const ai = client(apiKey);
   const contents =
     turns.length === 0
       ? [{ role: 'user' as const, parts: [{ text: "Let's start a casual chat." }] }]
       : toContents(turns);
-
-  const res = await withRetry(() =>
-    ai.models.generateContent({
-      model,
-      contents,
-      config: {
-        systemInstruction: freeSystem(phrases, studyWords),
-        responseMimeType: 'application/json',
-        responseSchema: freeSchema,
-        temperature: 0.9,
-      },
-    }),
-  );
-  const parsed = JSON.parse(res.text ?? '{}') as Partial<FreeResult>;
+  const parsed = (await generateJSON(
+    cfg,
+    freeSystem(phrases, studyWords),
+    contents,
+    0.9,
+    freeSchema,
+  )) as Partial<FreeResult>;
   return {
     reply: parsed.reply ?? '',
     replyKo: parsed.replyKo ?? '',
@@ -285,32 +339,25 @@ const lookupSchema = {
 };
 
 export async function lookupTerm(
-  apiKey: string,
+  cfg: ChatConfig,
   term: string,
-  model: string = CHAT_MODEL,
   context?: string,
 ): Promise<LookupResult> {
-  const ai = client(apiKey);
   const prompt = context
     ? `Define the English term "${term}" AS IT IS USED in the following passage. Rewrite what the passage says about this term into a simpler, easier definition — keep ALL the meaning and usage the passage conveys, just in easier words. Do NOT fall back to the most common or unrelated meaning.\n\nPassage:\n${context}`
     : `Define: "${term}"`;
-  const res = await withRetry(() =>
-    ai.models.generateContent({
-      model,
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      config: {
-        systemInstruction: `You are a friendly bilingual (English-Korean) dictionary for beginners. For the given English word or phrase/idiom, return JSON:
+  const system = `You are a friendly bilingual (English-Korean) dictionary for beginners. For the given English word or phrase/idiom, return JSON:
 - "partOfSpeech": short type label (e.g. "verb", "noun", "idiom", "phrasal verb") or "".
 - "english": an EASY English definition using simple, everyday words a beginner can understand. Avoid hard or academic vocabulary. IF A PASSAGE/CONTEXT IS GIVEN: your definition MUST preserve the SAME meaning and usage that the passage conveys — including the key nuance (how, where, or when the word is used) — only expressed more simply. Do NOT reduce it to a generic or unrelated sense, and do NOT drop the context's nuance. Use one or two short, plain sentences (enough to keep the full meaning; do not over-shorten).
 - "korean": a natural, short Korean meaning that matches this same sense.
-If it's an idiom or multi-word phrase, explain the whole expression in simple words, not individual words.`,
-        responseMimeType: 'application/json',
-        responseSchema: lookupSchema,
-        temperature: 0.3,
-      },
-    }),
-  );
-  const p = JSON.parse(res.text ?? '{}') as Partial<LookupResult>;
+If it's an idiom or multi-word phrase, explain the whole expression in simple words, not individual words.`;
+  const p = (await generateJSON(
+    cfg,
+    system,
+    [{ role: 'user', parts: [{ text: prompt }] }],
+    0.3,
+    lookupSchema,
+  )) as Partial<LookupResult>;
   return {
     term,
     partOfSpeech: p.partOfSpeech ?? '',

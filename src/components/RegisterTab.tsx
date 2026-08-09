@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { Category, Phrase } from '../types';
 import { newId } from '../store';
-import { lookupTerm } from '../lib/gemini';
+import { lookupTerm, type ChatConfig } from '../lib/gemini';
 
 interface Props {
   categories: Category[];
@@ -16,8 +16,8 @@ interface Props {
     source?: 'import' | 'chat';
     sourceLabel?: string;
   }) => void;
-  apiKey?: string;
-  model?: string;
+  chatCfg: ChatConfig;
+  chatReady: boolean;
 }
 
 export default function RegisterTab({
@@ -27,8 +27,8 @@ export default function RegisterTab({
   toggleSelected,
   addSelected,
   addWord,
-  apiKey,
-  model,
+  chatCfg,
+  chatReady,
 }: Props) {
   type Draft = { text: string; meaning: string; explanation: string; example: string };
   const emptyDraft: Draft = { text: '', meaning: '', explanation: '', example: '' };
@@ -167,15 +167,15 @@ export default function RegisterTab({
     };
 
     setImportBusy(true);
-    setImportMsg(`✓ ${summary()} 등록.${autoFill && apiKey ? ' 뜻을 채우는 중…' : ''}`);
+    setImportMsg(`✓ ${summary()} 등록.${autoFill && chatReady ? ' 뜻을 채우는 중…' : ''}`);
 
     // 2) 단어 → 단어장 등록 (맥락 기반 뜻/영영 풀이)
     for (const w of wordItems) {
       let english = '';
       let korean = w.meaning || '';
-      if (autoFill && apiKey) {
+      if (autoFill && chatReady) {
         try {
-          const r = await lookupTerm(apiKey, w.text, model, w.explanation);
+          const r = await lookupTerm(chatCfg, w.text, w.explanation);
           english = r.english;
           korean = r.korean || korean;
         } catch {
@@ -186,11 +186,11 @@ export default function RegisterTab({
     }
 
     // 3) 구문 뜻 자동 채우기 (맥락 기반)
-    if (autoFill && apiKey && targetId) {
+    if (autoFill && chatReady && targetId) {
       for (const p of phraseItems) {
         if (p.meaning) continue;
         try {
-          const r = await lookupTerm(apiKey, p.text, model, p.explanation);
+          const r = await lookupTerm(chatCfg, p.text, p.explanation);
           setCategories((prev) =>
             prev.map((c) =>
               c.id === targetId

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { GitHubConfig, Settings } from '../types';
-import { CHAT_MODELS } from '../lib/gemini';
+import { CHAT_MODELS, CHAT_ENGINES, GROQ_MODELS } from '../lib/gemini';
 import {
   CLOUD_MODELS,
   TTS_ENGINES,
@@ -159,50 +159,82 @@ export default function SettingsModal({
         </div>
 
         <div className="field">
-          <label>대화·사전 모델</label>
-          {(() => {
-            const cur = draft.model || 'gemini-3.5-flash-lite';
-            const isPreset = CHAT_MODELS.some((m) => m.id === cur);
-            return (
-              <>
-                <select
-                  className="select"
-                  value={isPreset ? cur : '__custom__'}
-                  onChange={(e) =>
-                    setDraft({
-                      ...draft,
-                      model: e.target.value === '__custom__' ? ' ' : e.target.value,
-                    })
-                  }
-                >
-                  {CHAT_MODELS.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.label}
-                    </option>
-                  ))}
-                  <option value="__custom__">직접 입력…</option>
-                </select>
-                {!isPreset && (
-                  <input
-                    className="input"
+          <label>대화·사전 엔진</label>
+          <select
+            className="select"
+            value={draft.chatEngine ?? 'gemini'}
+            onChange={(e) => setDraft({ ...draft, chatEngine: e.target.value as 'gemini' | 'groq' })}
+          >
+            {CHAT_ENGINES.map((en) => (
+              <option key={en.id} value={en.id}>
+                {en.label}
+              </option>
+            ))}
+          </select>
+
+          {(draft.chatEngine ?? 'gemini') === 'groq' ? (
+            <>
+              <select
+                className="select"
+                style={{ marginTop: 8 }}
+                value={draft.groqModel ?? 'llama-3.3-70b-versatile'}
+                onChange={(e) => setDraft({ ...draft, groqModel: e.target.value })}
+              >
+                {GROQ_MODELS.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+              <p className="hint" style={{ margin: '6px 0 0' }}>
+                Groq는 <b>무료·빠름</b>. 위 <b>클라우드 TTS 워커 주소</b>를 그대로 쓰고, 워커에{' '}
+                <code>GROQ_API_KEY</code> 시크릿을 넣고 재배포해야 동작해요 (<code>worker/README.md</code>).{' '}
+                <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer">
+                  무료 키 발급
+                </a>
+              </p>
+            </>
+          ) : (
+            (() => {
+              const cur = draft.model || 'gemini-3.5-flash-lite';
+              const isPreset = CHAT_MODELS.some((m) => m.id === cur);
+              return (
+                <>
+                  <select
+                    className="select"
                     style={{ marginTop: 8 }}
-                    placeholder="모델 ID 직접 입력 (예: gemini-3.6-flash)"
-                    value={(draft.model ?? '').trim()}
-                    onChange={(e) => setDraft({ ...draft, model: e.target.value.trim() })}
-                    autoFocus
-                  />
-                )}
-              </>
-            );
-          })()}
-          <p className="hint" style={{ margin: '6px 0 0' }}>
-            "모델을 쓸 수 없다"(404)거나 한도(429)가 자주 뜨면 다른 모델로 바꾸세요. 계정에서 지원하는
-            정확한 ID는{' '}
-            <a href="https://aistudio.google.com/rate-limit" target="_blank" rel="noreferrer">
-              대시보드
-            </a>
-            에서 확인.
-          </p>
+                    value={isPreset ? cur : '__custom__'}
+                    onChange={(e) =>
+                      setDraft({
+                        ...draft,
+                        model: e.target.value === '__custom__' ? ' ' : e.target.value,
+                      })
+                    }
+                  >
+                    {CHAT_MODELS.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.label}
+                      </option>
+                    ))}
+                    <option value="__custom__">직접 입력…</option>
+                  </select>
+                  {!isPreset && (
+                    <input
+                      className="input"
+                      style={{ marginTop: 8 }}
+                      placeholder="모델 ID 직접 입력 (예: gemini-3.6-flash)"
+                      value={(draft.model ?? '').trim()}
+                      onChange={(e) => setDraft({ ...draft, model: e.target.value.trim() })}
+                      autoFocus
+                    />
+                  )}
+                  <p className="hint" style={{ margin: '6px 0 0' }}>
+                    한도(429)가 자주 뜨면 Flash-Lite로 바꾸거나 위에서 <b>Groq</b> 엔진을 선택하세요.
+                  </p>
+                </>
+              );
+            })()
+          )}
         </div>
 
         <div className="field">

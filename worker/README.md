@@ -55,6 +55,19 @@ Cloudflare 하루 한도가 부족하면 Google Cloud TTS(Neural2, **매월 100�
    ```
 4. 앱 ⚙ 설정 → **음성 엔진: Google Cloud** 선택 → 음성 고르고 미리듣기.
 
+## (선택) Groq — 무료·빠른 "대화·사전" 엔진 (Gemini 대체)
+
+Gemini 한도가 부족하면 대화·교정·사전을 Groq(Llama 3.3 등, 무료·매우 빠름)로 돌릴 수 있어요. 같은 워커가 대신 호출해요.
+
+1. [console.groq.com/keys](https://console.groq.com/keys) 에서 무료 API 키 발급(카드 불필요).
+2. 워커에 시크릿 등록 + 재배포:
+   ```bash
+   cd worker
+   npx wrangler secret put GROQ_API_KEY   # Groq 키 붙여넣기
+   npx wrangler deploy
+   ```
+3. 앱 ⚙ 설정 → **대화·사전 엔진: Groq** 선택 → 모델(Llama 3.3 70B 등) 고르기. (워커 주소는 TTS와 동일하게 재사용)
+
 ## 참고
 - Cloudflare 무료 한도(하루 1만 뉴런) 초과 시 다음날 리셋. Google은 매월 100만 자.
 - 한도 초과/실패 시 앱은 자동으로 브라우저 내장 음성으로 대체 재생해요.

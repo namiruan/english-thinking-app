@@ -9,7 +9,7 @@ import type {
   TranslatedLine,
 } from '../types';
 import { newId } from '../store';
-import { focusTurn, freeTurn, friendlyError, type Turn } from '../lib/gemini';
+import { focusTurn, freeTurn, friendlyError, type Turn, type ChatConfig } from '../lib/gemini';
 import { synthCloudBuffer, isQuotaError, markQuotaHit } from '../lib/cloudtts';
 import { speakBrowser, stopBrowser, browserTtsSupported } from '../lib/browsertts';
 import { catHue } from '../lib/ui';
@@ -24,6 +24,8 @@ interface Props {
   poolKey: string;
   multiCat: boolean;
   settings: Settings;
+  chatCfg: ChatConfig;
+  chatReady: boolean;
   recordFocusTurn: (phraseText: string, clean: boolean) => void;
   recordFreeTurn: () => void;
   addGrammar: (category: string, note: string, example: string) => void;
@@ -239,6 +241,8 @@ export default function ChatTab({
   poolKey,
   multiCat,
   settings,
+  chatCfg,
+  chatReady,
   recordFocusTurn,
   recordFreeTurn,
   addGrammar,
@@ -267,7 +271,6 @@ export default function ChatTab({
   const turnsRef = useRef<Turn[]>([]);
 
   const phrase: PracticePhrase | undefined = phrases[phraseIdx];
-  const model = settings.model?.trim() || 'gemini-3.5-flash-lite';
 
   const resetSession = () => {
     // 진행상황은 매 턴 자동 저장되므로 여기선 현재 대화만 초기화
@@ -550,18 +553,18 @@ export default function ChatTab({
 
   // ── 대화 시작 ──────────────────────────
   const start = async () => {
-    if (!settings.apiKey) return openSettings();
+    if (!chatReady) return openSettings();
     if (loading) return;
     unlockAudio(); // 클릭 제스처 안에서 오디오 잠금해제 (자동재생 대비)
     setLoading(true);
     try {
       if (mode === 'focus') {
         if (!phrase) return;
-        const r = await focusTurn(settings.apiKey, phrase, turnsRef.current, studyWords, model);
+        const r = await focusTurn(chatCfg, phrase, turnsRef.current, studyWords);
         turnsRef.current.push({ role: 'model', text: JSON.stringify(r) });
         await pushWithSpeech(focusToMessage(r), r.question, 'q');
       } else {
-        const r = await freeTurn(settings.apiKey, phrases, turnsRef.current, studyWords, model);
+        const r = await freeTurn(chatCfg, phrases, turnsRef.current, studyWords);
         turnsRef.current.push({ role: 'model', text: JSON.stringify(r) });
         await pushWithSpeech(freeToMessage(r), r.reply, '0');
       }
@@ -576,7 +579,7 @@ export default function ChatTab({
   const send = async () => {
     const text = input.trim();
     if (!text || loading) return;
-    if (!settings.apiKey) return openSettings();
+    if (!chatReady) return openSettings();
 
     unlockAudio(); // 클릭 제스처 안에서 오디오 잠금해제 (자동재생 대비)
     const userMsg = push({ role: 'user', text });
@@ -588,7 +591,7 @@ export default function ChatTab({
       if (mode === 'focus') {
         if (!phrase) return;
         setFocusCount((c) => c + 1);
-        const r = await focusTurn(settings.apiKey, phrase, turnsRef.current, studyWords, model);
+        const r = await focusTurn(chatCfg, phrase, turnsRef.current, studyWords);
         turnsRef.current.push({ role: 'model', text: JSON.stringify(r) });
         if (r.clean) setCleanCount((c) => Math.min(CLEAN_GOAL, c + 1));
         recordFocusTurn(phrase.text, r.clean); // 구문별 숙련도 + 일일 활동 자동 저장
@@ -617,7 +620,7 @@ export default function ChatTab({
       } else {
         setFreeCount((c) => c + 1);
         recordFreeTurn(); // 일일 활동 자동 저장
-        const r = await freeTurn(settings.apiKey, phrases, turnsRef.current, studyWords, model);
+        const r = await freeTurn(chatCfg, phrases, turnsRef.current, studyWords);
         turnsRef.current.push({ role: 'model', text: JSON.stringify(r) });
         await pushWithSpeech(freeToMessage(r), r.reply, '0');
       }
@@ -650,7 +653,7 @@ export default function ChatTab({
   };
 
   const started = messages.length > 0;
-  const missingKey = !settings.apiKey;
+  const missingKey = !chatReady;
 
   if (phrases.length === 0) {
     return (

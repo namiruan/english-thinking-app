@@ -33,6 +33,31 @@ export default {
       return new Response('bad json', { status: 400, headers: CORS });
     }
 
+    // ── 대화·사전: Groq (OpenAI 호환) ──
+    if (String(body.kind || '') === 'chat') {
+      if (!env.GROQ_API_KEY) {
+        return new Response('no groq key: set GROQ_API_KEY secret', { status: 500, headers: CORS });
+      }
+      const gres = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer ' + env.GROQ_API_KEY,
+        },
+        body: JSON.stringify({
+          model: String(body.model || 'llama-3.3-70b-versatile'),
+          messages: Array.isArray(body.messages) ? body.messages : [],
+          temperature: typeof body.temperature === 'number' ? body.temperature : 0.7,
+          response_format: { type: 'json_object' },
+        }),
+      });
+      const gbody = await gres.text();
+      return new Response(gbody, {
+        status: gres.status,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
+      });
+    }
+
     const text = String(body.text || '').slice(0, 1000).trim();
     const speaker = String(body.speaker || 'asteria');
     if (!text) return new Response('no text', { status: 400, headers: CORS });

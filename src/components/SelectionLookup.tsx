@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import { friendlyError, lookupTerm, type LookupResult } from '../lib/gemini';
+import { friendlyError, lookupTerm, type LookupResult, type ChatConfig } from '../lib/gemini';
 import type { WordEntry } from '../types';
 
 interface Props {
-  apiKey: string;
-  model: string;
+  chatCfg: ChatConfig;
+  chatReady: boolean;
   onAdd: (w: Pick<WordEntry, 'term' | 'english' | 'korean' | 'source' | 'sourceLabel'>) => void;
 }
 
@@ -14,7 +14,7 @@ interface Anchor {
   y: number;
 }
 
-export default function SelectionLookup({ apiKey, model, onAdd }: Props) {
+export default function SelectionLookup({ chatCfg, chatReady, onAdd }: Props) {
   const [anchor, setAnchor] = useState<Anchor | null>(null);
   const [result, setResult] = useState<LookupResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -47,20 +47,21 @@ export default function SelectionLookup({ apiKey, model, onAdd }: Props) {
   // 조회
   useEffect(() => {
     if (!anchor) return;
-    if (!apiKey) {
-      setError('설정에서 Gemini API 키를 먼저 입력해주세요.');
+    if (!chatReady) {
+      setError('설정에서 대화·사전 엔진(API 키 또는 Groq)을 먼저 설정해주세요.');
       return;
     }
     let alive = true;
     setLoading(true);
     setError('');
-    lookupTerm(apiKey, anchor.term, model)
+    lookupTerm(chatCfg, anchor.term)
       .then((r) => alive && (setResult(r), setLoading(false)))
       .catch((e) => alive && (setError(friendlyError(e)), setLoading(false)));
     return () => {
       alive = false;
     };
-  }, [anchor, apiKey, model]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [anchor, chatReady, chatCfg.engine, chatCfg.apiKey, chatCfg.workerUrl]);
 
   if (!anchor) return null;
 

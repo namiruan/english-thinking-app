@@ -85,7 +85,9 @@ export interface GitHubConfig {
 
 export interface Settings {
   apiKey: string;
-  model?: string; // 대화/사전 모델 (기본 gemini)
+  chatEngine?: 'gemini' | 'groq'; // 대화·사전 엔진
+  groqModel?: string; // Groq 모델 (워커 경유)
+  model?: string; // 대화/사전 모델 (Gemini)
   ttsUrl?: string; // 클라우드 TTS Worker 주소
   ttsSecret?: string; // 클라우드 TTS 시크릿 (선택)
   ttsEngine?: 'cloudflare' | 'google'; // TTS 제공자

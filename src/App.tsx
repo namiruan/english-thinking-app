@@ -12,6 +12,7 @@ import {
 import { loadVault, type Vault } from './lib/vault';
 import { decryptSecret } from './lib/crypto';
 import { decryptData, snapshot, pushVault, type SyncData } from './lib/sync';
+import type { ChatConfig } from './lib/gemini';
 import ChatTab from './components/ChatTab';
 import RegisterTab from './components/RegisterTab';
 import HistoryTab from './components/HistoryTab';
@@ -117,6 +118,21 @@ export default function App() {
     () => ({ ...settings, apiKey: effectiveKey }),
     [settings, effectiveKey],
   );
+
+  // 대화·사전 엔진 설정 (Gemini 또는 Groq·워커 경유)
+  const chatCfg: ChatConfig = useMemo(
+    () => ({
+      engine: settings.chatEngine === 'groq' ? 'groq' : 'gemini',
+      apiKey: effectiveKey,
+      model: settings.model?.trim() || 'gemini-3.5-flash-lite',
+      workerUrl: settings.ttsUrl,
+      secret: settings.ttsSecret,
+      groqModel: settings.groqModel,
+    }),
+    [settings, effectiveKey],
+  );
+  // 대화 가능 여부: Gemini는 키, Groq는 워커 주소
+  const chatReady = chatCfg.engine === 'groq' ? !!chatCfg.workerUrl : !!effectiveKey;
 
   // 비번 강제: vault에 암호화 자료가 있으면 잠금 해제 전까지 앱을 막음
   const locked = booted && !!(vault?.dataEnc || vault?.secret || vault?.phrasesEnc) && !unlocked;
@@ -285,8 +301,8 @@ export default function App() {
               toggleSelected={toggleSelected}
               addSelected={addSelected}
               addWord={addWord}
-              apiKey={effectiveKey}
-              model={effectiveSettings.model?.trim() || 'gemini-3.5-flash-lite'}
+              chatCfg={chatCfg}
+              chatReady={chatReady}
             />
           )}
 
@@ -298,6 +314,8 @@ export default function App() {
               poolKey={poolKey}
               multiCat={multiCat}
               settings={effectiveSettings}
+              chatCfg={chatCfg}
+              chatReady={chatReady}
               recordFocusTurn={recordFocusTurn}
               recordFreeTurn={recordFreeTurn}
               addGrammar={addGrammar}
@@ -338,11 +356,7 @@ export default function App() {
           )}
 
           {/* 드래그 사전 조회 팝업 */}
-          <SelectionLookup
-            apiKey={effectiveKey}
-            model={effectiveSettings.model?.trim() || 'gemini-3.5-flash-lite'}
-            onAdd={addWord}
-          />
+          <SelectionLookup chatCfg={chatCfg} chatReady={chatReady} onAdd={addWord} />
         </>
       )}
 
