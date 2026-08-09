@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { GrammarStat, Progress } from '../store';
 import { computeStreak, weekCount, todayKey } from '../store';
 
@@ -8,27 +9,76 @@ interface Props {
   clearGrammar: () => void;
 }
 
-function mastery(clean: number): { label: string; pct: number } {
-  const pct = Math.min(clean / 5, 1) * 100;
-  if (clean >= 5) return { label: '숙련 ✓', pct };
-  if (clean >= 3) return { label: '익어가는 중', pct };
-  if (clean >= 1) return { label: '연습 중', pct };
-  return { label: '더 연습 필요', pct };
+// 숙련 기준: Bloom 완전학습(Mastery Learning)의 80% + 성공률이 의미있으려면 최소 시도 수
+const MASTERY_RATE = 0.8;
+const MIN_ATTEMPTS = 5;
+
+interface PhraseStat {
+  text: string;
+  clean: number;
+  attempts: number;
+  rate: number;
+  pct: number;
+  mastered: boolean;
+  label: string;
+  tone: string;
+}
+
+function mastery(text: string, clean: number, attempts: number): PhraseStat {
+  const rate = attempts ? clean / attempts : 0;
+  const pct = Math.round(rate * 100);
+  const mastered = attempts >= MIN_ATTEMPTS && rate >= MASTERY_RATE;
+  let label = '더 연습 필요';
+  let tone = '';
+  if (mastered) {
+    label = '숙련 완료 ✓';
+    tone = 'good';
+  } else if (attempts < MIN_ATTEMPTS) {
+    label = `연습 중 (${attempts}/${MIN_ATTEMPTS}회)`;
+    tone = '';
+  } else if (rate >= 0.5) {
+    label = '익어가는 중';
+    tone = 'accent';
+  }
+  return { text, clean, attempts, rate, pct, mastered, label, tone };
+}
+
+function PhraseRow({ p }: { p: PhraseStat }) {
+  return (
+    <div className="grammar-item">
+      <div className="grammar-top">
+        <span className="grammar-cat" style={{ fontFamily: 'var(--mono)' }}>{p.text}</span>
+        <span className={`chip ${p.tone}`}>{p.label}</span>
+      </div>
+      <div className="grammar-bar">
+        <span style={{ width: `${p.pct}%`, background: p.mastered ? 'var(--good)' : 'var(--accent)' }} />
+      </div>
+      <div className="grammar-ex" style={{ fontFamily: 'var(--sans)' }}>
+        성공률 {p.pct}% · 정확 {p.clean}/{p.attempts}
+      </div>
+    </div>
+  );
 }
 
 export default function HistoryTab({ progress, clearProgress, grammarStats, clearGrammar }: Props) {
   const streak = computeStreak(progress.daily);
   const today = progress.daily[todayKey()] ?? 0;
   const week = weekCount(progress.daily);
+  const [showMastered, setShowMastered] = useState(false);
 
   const grammar = Object.values(grammarStats).sort((a, b) => b.count - a.count);
   const maxCount = grammar[0]?.count ?? 1;
 
-  const phrases = Object.entries(progress.phrases)
-    .map(([text, p]) => ({ text, ...p }))
-    .sort((a, b) => a.clean - b.clean || b.attempts - a.attempts); // 덜 익은 것 먼저
+  const phraseStats = Object.entries(progress.phrases).map(([text, p]) =>
+    mastery(text, p.clean, p.attempts),
+  );
+  const learning = phraseStats
+    .filter((p) => !p.mastered)
+    .sort((a, b) => a.rate - b.rate || b.attempts - a.attempts); // 덜 익은 것 먼저
+  const mastered = phraseStats.filter((p) => p.mastered).sort((a, b) => b.rate - a.rate);
+  const phraseCount = phraseStats.length;
 
-  const hasAny = today + week + phrases.length + grammar.length > 0;
+  const hasAny = today + week + phraseCount + grammar.length > 0;
 
   return (
     <div>
@@ -89,7 +139,7 @@ export default function HistoryTab({ progress, clearProgress, grammarStats, clea
       )}
 
       {/* 구문별 숙련도 */}
-      {phrases.length > 0 && (
+      {phraseCount > 0 && (
         <div style={{ marginBottom: 20 }}>
           <div className="row between" style={{ marginBottom: 8 }}>
             <div className="section-label" style={{ margin: 0 }}>구문별 숙련도</div>
@@ -97,33 +147,42 @@ export default function HistoryTab({ progress, clearProgress, grammarStats, clea
               지우기
             </button>
           </div>
-          <p className="hint" style={{ margin: '0 0 10px' }}>
-            올바르게 쓴 횟수 기준. 덜 익은 구문이 위에 있어요. (5회 = 숙련)
-          </p>
-          <div className="card">
-            {phrases.map((p) => {
-              const m = mastery(p.clean);
-              return (
-                <div className="grammar-item" key={p.text}>
-                  <div className="grammar-top">
-                    <span className="grammar-cat" style={{ fontFamily: 'var(--mono)' }}>{p.text}</span>
-                    <span className={`chip ${p.clean >= 5 ? 'good' : ''}`}>{m.label}</span>
-                  </div>
-                  <div className="grammar-bar">
-                    <span
-                      style={{
-                        width: `${m.pct}%`,
-                        background: p.clean >= 5 ? 'var(--good)' : 'var(--accent)',
-                      }}
-                    />
-                  </div>
-                  <div className="grammar-ex" style={{ fontFamily: 'var(--sans)' }}>
-                    정확 {p.clean} / 시도 {p.attempts}
-                  </div>
-                </div>
-              );
-            })}
+          <div className="row" style={{ gap: 6, marginBottom: 10 }}>
+            <span className="chip good">숙련 완료 {mastered.length}</span>
+            <span className="chip accent">연습 중 {learning.length}</span>
           </div>
+
+          {learning.length > 0 ? (
+            <div className="card">
+              {learning.map((p) => (
+                <PhraseRow key={p.text} p={p} />
+              ))}
+            </div>
+          ) : (
+            <div className="empty" style={{ padding: '20px 16px' }}>
+              모든 구문을 숙련했어요! 🎉
+            </div>
+          )}
+
+          {mastered.length > 0 && (
+            <div style={{ marginTop: 10 }}>
+              <button
+                className="btn sm ghost"
+                style={{ width: '100%', justifyContent: 'center' }}
+                onClick={() => setShowMastered((v) => !v)}
+              >
+                {showMastered ? '▾' : '▸'} 숙련 완료 {mastered.length}개{' '}
+                {showMastered ? '숨기기' : '보기'}
+              </button>
+              {showMastered && (
+                <div className="card" style={{ marginTop: 8 }}>
+                  {mastered.map((p) => (
+                    <PhraseRow key={p.text} p={p} />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
