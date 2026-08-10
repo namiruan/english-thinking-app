@@ -179,7 +179,11 @@ export default function SettingsModal({
               <select
                 className="select"
                 style={{ marginTop: 8 }}
-                value={draft.groqModel ?? 'llama-3.3-70b-versatile'}
+                value={
+                  GROQ_MODELS.some((m) => m.id === draft.groqModel)
+                    ? draft.groqModel
+                    : 'qwen/qwen3.6-27b'
+                }
                 onChange={(e) => setDraft({ ...draft, groqModel: e.target.value })}
               >
                 {GROQ_MODELS.map((m) => (

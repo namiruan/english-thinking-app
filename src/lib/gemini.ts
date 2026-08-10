@@ -17,12 +17,13 @@ export const CHAT_MODELS = [
 // 대화·사전 엔진 선택
 export const CHAT_ENGINES = [
   { id: 'gemini', label: 'Gemini (Google)' },
-  { id: 'groq', label: 'Groq · 무료·빠름 (Llama)' },
+  { id: 'groq', label: 'Groq · 무료·빠름 (Qwen)' },
 ];
-// Groq 모델 (워커 경유)
+// Groq 모델 (워커 경유). Llama는 한국어 약함 → Qwen 권장.
 export const GROQ_MODELS = [
-  { id: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B · 고품질 (권장)' },
-  { id: 'llama-3.1-8b-instant', label: 'Llama 3.1 8B · 아주 빠름·한도 큼' },
+  { id: 'qwen/qwen3.6-27b', label: 'Qwen 3.6 27B · 한국어 강함 (권장)' },
+  { id: 'openai/gpt-oss-120b', label: 'GPT-OSS 120B · 고품질' },
+  { id: 'openai/gpt-oss-20b', label: 'GPT-OSS 20B · 빠름' },
 ];
 
 function client(apiKey: string) {
@@ -89,7 +90,7 @@ async function generateJSON(
       headers: { 'Content-Type': 'application/json', ...(cfg.secret ? { 'X-Secret': cfg.secret } : {}) },
       body: JSON.stringify({
         kind: 'chat',
-        model: cfg.groqModel || 'llama-3.3-70b-versatile',
+        model: cfg.groqModel || 'qwen/qwen3.6-27b',
         messages,
         temperature,
       }),
@@ -121,7 +122,7 @@ async function generateJSON(
 
 // 번역 원칙 (모든 번역 필드 공통)
 const TRANSLATION_RULE =
-  'Korean translations must sound NATURAL — convey the meaning the way a Korean speaker would actually say it. Not a stiff word-for-word literal translation, but also faithful with no mistranslation.';
+  'Korean translations must sound NATURAL — convey the meaning the way a Korean speaker would actually say it. Not a stiff word-for-word literal translation, but also faithful with no mistranslation. Write ALL Korean text strictly in Hangul with correct word spacing; NEVER use Chinese characters/Hanja, Japanese kana, Thai/Lao, or any non-Korean script. Every Korean field must be filled (never empty).';
 
 // 문법 오류 분류 (집계를 위해 고정된 라벨만 사용)
 export const GRAMMAR_CATEGORIES = [
@@ -349,7 +350,7 @@ export async function lookupTerm(
   const system = `You are a friendly bilingual (English-Korean) dictionary for beginners. For the given English word or phrase/idiom, return JSON:
 - "partOfSpeech": short type label (e.g. "verb", "noun", "idiom", "phrasal verb") or "".
 - "english": an EASY English definition using simple, everyday words a beginner can understand. Avoid hard or academic vocabulary. IF A PASSAGE/CONTEXT IS GIVEN: your definition MUST preserve the SAME meaning and usage that the passage conveys — including the key nuance (how, where, or when the word is used) — only expressed more simply. Do NOT reduce it to a generic or unrelated sense, and do NOT drop the context's nuance. Use one or two short, plain sentences (enough to keep the full meaning; do not over-shorten).
-- "korean": a natural, short Korean meaning that matches this same sense.
+- "korean": a natural, short Korean meaning that matches this same sense. MUST be filled, written strictly in Hangul (no Chinese characters/Hanja, no Japanese, no other scripts), with correct spacing.
 If it's an idiom or multi-word phrase, explain the whole expression in simple words, not individual words.`;
   const p = (await generateJSON(
     cfg,

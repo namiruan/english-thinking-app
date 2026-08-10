@@ -45,7 +45,7 @@ export default {
           Authorization: 'Bearer ' + env.GROQ_API_KEY,
         },
         body: JSON.stringify({
-          model: String(body.model || 'llama-3.3-70b-versatile'),
+          model: String(body.model || 'qwen/qwen3.6-27b'),
           messages: Array.isArray(body.messages) ? body.messages : [],
           temperature: typeof body.temperature === 'number' ? body.temperature : 0.7,
           response_format: { type: 'json_object' },

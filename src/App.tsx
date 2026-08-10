@@ -128,7 +128,11 @@ export default function App() {
       model: settings.model?.trim() || 'gemini-3.5-flash-lite',
       workerUrl: settings.ttsUrl,
       secret: settings.ttsSecret,
-      groqModel: settings.groqModel,
+      // 지원 종료된 Llama 모델이 저장돼 있으면 자동으로 Qwen(한국어 강함)으로
+      groqModel:
+        settings.groqModel && !/llama/i.test(settings.groqModel)
+          ? settings.groqModel
+          : 'qwen/qwen3.6-27b',
     }),
     [settings, effectiveKey],
   );
@@ -379,7 +383,7 @@ export default function App() {
       <footer className="footer">
         영어식 사고 ·{' '}
         {effectiveSettings.chatEngine === 'groq'
-          ? `Groq (${effectiveSettings.groqModel || 'llama-3.3-70b-versatile'})`
+          ? `Groq (${effectiveSettings.groqModel || 'qwen/qwen3.6-27b'})`
           : effectiveSettings.model?.trim() || 'gemini-3.5-flash-lite'}{' '}
         · {effectiveSettings.ttsEngine === 'google' ? 'Google 음성' : 'Cloudflare 음성'} · 자동 동기화
       </footer>
