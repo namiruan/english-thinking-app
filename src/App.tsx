@@ -132,7 +132,7 @@ export default function App() {
       groqModel:
         settings.groqModel && !/llama/i.test(settings.groqModel)
           ? settings.groqModel
-          : 'qwen/qwen3.6-27b',
+          : 'openai/gpt-oss-120b',
     }),
     [settings, effectiveKey],
   );
@@ -383,7 +383,7 @@ export default function App() {
       <footer className="footer">
         영어식 사고 ·{' '}
         {effectiveSettings.chatEngine === 'groq'
-          ? `Groq (${effectiveSettings.groqModel || 'qwen/qwen3.6-27b'})`
+          ? `Groq (${effectiveSettings.groqModel || 'openai/gpt-oss-120b'})`
           : effectiveSettings.model?.trim() || 'gemini-3.5-flash-lite'}{' '}
         · {effectiveSettings.ttsEngine === 'google' ? 'Google 음성' : 'Cloudflare 음성'} · 자동 동기화
       </footer>

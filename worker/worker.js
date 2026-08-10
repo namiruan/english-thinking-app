@@ -45,10 +45,10 @@ export default {
           Authorization: 'Bearer ' + env.GROQ_API_KEY,
         },
         body: JSON.stringify({
-          model: String(body.model || 'qwen/qwen3.6-27b'),
+          model: String(body.model || 'openai/gpt-oss-120b'),
           messages: Array.isArray(body.messages) ? body.messages : [],
           temperature: typeof body.temperature === 'number' ? body.temperature : 0.7,
-          response_format: { type: 'json_object' },
+          // response_format(json_object)은 추론형 모델에서 400을 유발 → 프롬프트+클라 파싱으로 처리
         }),
       });
       const gbody = await gres.text();

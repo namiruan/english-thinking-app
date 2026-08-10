@@ -182,7 +182,7 @@ export default function SettingsModal({
                 value={
                   GROQ_MODELS.some((m) => m.id === draft.groqModel)
                     ? draft.groqModel
-                    : 'qwen/qwen3.6-27b'
+                    : 'openai/gpt-oss-120b'
                 }
                 onChange={(e) => setDraft({ ...draft, groqModel: e.target.value })}
               >

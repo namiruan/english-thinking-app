@@ -64,7 +64,7 @@ export const defaultGitHub: GitHubConfig = {
 export const defaultSettings: Settings = {
   apiKey: (import.meta.env.VITE_GEMINI_API_KEY as string | undefined) ?? '',
   chatEngine: 'gemini',
-  groqModel: 'qwen/qwen3.6-27b',
+  groqModel: 'openai/gpt-oss-120b',
   model: 'gemini-3.5-flash-lite',
   ttsEngine: 'cloudflare',
   ttsModel: 'aura-1',

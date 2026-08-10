@@ -17,13 +17,14 @@ export const CHAT_MODELS = [
 // 대화·사전 엔진 선택
 export const CHAT_ENGINES = [
   { id: 'gemini', label: 'Gemini (Google)' },
-  { id: 'groq', label: 'Groq · 무료·빠름 (Qwen)' },
+  { id: 'groq', label: 'Groq · 무료·빠름 (gpt-oss)' },
 ];
-// Groq 모델 (워커 경유). Llama는 한국어 약함 → Qwen 권장.
+// Groq 모델 (워커 경유). gpt-oss가 JSON 출력·한국어 균형 좋음(권장).
+// Qwen은 한국어 최고지만 추론 토큰 때문에 JSON 오류가 날 수 있음.
 export const GROQ_MODELS = [
-  { id: 'qwen/qwen3.6-27b', label: 'Qwen 3.6 27B · 한국어 강함 (권장)' },
-  { id: 'openai/gpt-oss-120b', label: 'GPT-OSS 120B · 고품질' },
+  { id: 'openai/gpt-oss-120b', label: 'GPT-OSS 120B · 한국어·안정성 균형 (권장)' },
   { id: 'openai/gpt-oss-20b', label: 'GPT-OSS 20B · 빠름' },
+  { id: 'qwen/qwen3.6-27b', label: 'Qwen 3.6 27B · 한국어 최고(JSON 오류 가능)' },
 ];
 
 function client(apiKey: string) {
@@ -58,6 +59,24 @@ function toContents(turns: Turn[]) {
   return turns.map((t) => ({ role: t.role, parts: [{ text: t.text }] }));
 }
 
+/** 모델 출력에서 JSON 객체를 견고하게 추출 (추론 토큰/코드펜스 섞여도) */
+function extractJSON(text: string): Record<string, unknown> {
+  let t = text.replace(/<think>[\s\S]*?<\/think>/gi, ''); // 추론 블록 제거
+  t = t.replace(/```(?:json)?/gi, '').trim();
+  const start = t.indexOf('{');
+  if (start >= 0) {
+    let depth = 0;
+    for (let i = start; i < t.length; i++) {
+      if (t[i] === '{') depth++;
+      else if (t[i] === '}') {
+        depth--;
+        if (depth === 0) return JSON.parse(t.slice(start, i + 1)) as Record<string, unknown>;
+      }
+    }
+  }
+  return JSON.parse(t || '{}') as Record<string, unknown>;
+}
+
 // ── 대화 엔진 (Gemini 또는 Groq · 워커 경유) ──────────────
 export interface ChatConfig {
   engine: 'gemini' | 'groq';
@@ -85,23 +104,33 @@ async function generateJSON(
         content: c.parts.map((p) => p.text).join('\n'),
       })),
     ];
-    const res = await fetch(cfg.workerUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...(cfg.secret ? { 'X-Secret': cfg.secret } : {}) },
-      body: JSON.stringify({
-        kind: 'chat',
-        model: cfg.groqModel || 'qwen/qwen3.6-27b',
-        messages,
-        temperature,
-      }),
+    const body = JSON.stringify({
+      kind: 'chat',
+      model: cfg.groqModel || 'openai/gpt-oss-120b',
+      messages,
+      temperature,
     });
-    if (!res.ok) {
+    // 분당 한도(429)면 서버가 알려준 시간만큼(최대 20s) 기다렸다 자동 재시도
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const res = await fetch(cfg.workerUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(cfg.secret ? { 'X-Secret': cfg.secret } : {}) },
+        body,
+      });
+      if (res.ok) {
+        const j = await res.json();
+        return extractJSON(j?.choices?.[0]?.message?.content ?? '{}');
+      }
       const detail = await res.text().catch(() => '');
+      if (res.status === 429 && attempt < 2) {
+        const m = detail.match(/(?:try again in|retry after)\s*([\d.]+)\s*s/i);
+        const wait = Math.min(m ? parseFloat(m[1]) : 3, 20);
+        await new Promise((r) => setTimeout(r, (wait + 0.3) * 1000));
+        continue;
+      }
       throw new Error(`GROQ ${res.status}: ${detail}`.slice(0, 220));
     }
-    const j = await res.json();
-    const text = j?.choices?.[0]?.message?.content ?? '{}';
-    return JSON.parse(text) as Record<string, unknown>;
+    throw new Error('GROQ 요청이 반복 실패했어요.');
   }
   // Gemini
   const ai = client(cfg.apiKey);
@@ -422,8 +451,8 @@ export function friendlyError(e: unknown): string {
   if (msg === 'NO_API_KEY') return 'API 키가 없어요. 우측 상단 "설정"에서 Gemini API 키를 입력해주세요.';
   if (msg === 'NO_TTS_URL') return '설정에서 클라우드 TTS 서버 주소를 입력해주세요.';
   if (/quota|rate|RESOURCE_EXHAUSTED|429/i.test(msg)) {
-    const m = msg.match(/retryDelay["':\s]+(\d+)\s*s/i);
-    const secs = m ? parseInt(m[1], 10) : 0;
+    const m = msg.match(/retryDelay["':\s]+(\d+)\s*s/i) || msg.match(/(?:try again in|retry after)\s*([\d.]+)\s*s/i);
+    const secs = m ? Math.ceil(parseFloat(m[1])) : 0;
     if (/per\s*day|perday|daily|requests per day/i.test(msg) || secs > 120)
       return '오늘 이 모델의 무료 일일 한도를 다 썼어요. (미국 태평양시 자정에 초기화) 설정 → "대화·사전 모델"에서 다른 모델로 바꾸면 계속 쓸 수 있어요.';
     return `요청이 잠깐 몰렸어요(분당 한도). ${secs ? `약 ${secs}초 후` : '약 1분 후'} 다시 시도하거나, 설정에서 다른 모델로 바꿔보세요.`;
